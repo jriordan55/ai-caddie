@@ -1,0 +1,3356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07110E" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="AI Caddie" />
+  <meta name="description" content="AI Caddie: club calls, live GPS, and bag intelligence from your launch monitor data." />
+  <title>AI Caddie</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <style>
+    :root {
+      --bg: #07110E;
+      --bg-2: #0D1C17;
+      --surface: #12261F;
+      --surface-2: #18352B;
+      --line: rgba(232, 240, 234, 0.09);
+      --line-strong: rgba(232, 240, 234, 0.16);
+      --text: #EEF5F0;
+      --muted: #8FA89A;
+      --accent: #9BE56E;
+      --accent-2: #E8D48B;
+      --accent-dim: rgba(155, 229, 110, 0.12);
+      --warn: #E8C06A;
+      --danger: #E8907A;
+      --left: #7EB8E8;
+      --right: #E8C06A;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --nav-h: 68px;
+      --font: "Sora", system-ui, sans-serif;
+      --num: "Oswald", "Arial Narrow", sans-serif;
+      --radius: 16px;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background:
+        radial-gradient(ellipse 90% 50% at 80% -5%, rgba(155, 229, 110, 0.08), transparent 50%),
+        radial-gradient(ellipse 70% 40% at 10% 0%, rgba(232, 212, 139, 0.05), transparent 45%),
+        linear-gradient(180deg, #0A1813 0%, var(--bg) 38%, #050C0A 100%);
+      color: var(--text);
+      font-family: var(--font);
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button, input { font: inherit; color: inherit; }
+    button {
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      padding: 14px 16px calc(var(--nav-h) + var(--safe-bottom) + 20px);
+      position: relative;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 10px 0 4px;
+      animation: brandIn 0.5s ease both;
+    }
+    @keyframes brandIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: none; }
+    }
+    .brand-mark {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      border-radius: 12px;
+      background:
+        linear-gradient(145deg, rgba(155, 229, 110, 0.28), rgba(155, 229, 110, 0.06)),
+        var(--surface-2);
+      border: 1px solid var(--line-strong);
+      display: grid;
+      place-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .brand-icon::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(155, 229, 110, 0.25);
+    }
+    .brand-icon::after {
+      content: "";
+      position: absolute;
+      bottom: 8px;
+      width: 18px;
+      height: 2px;
+      background: var(--accent-2);
+      border-radius: 2px;
+      opacity: 0.85;
+    }
+    .brand-text { min-width: 0; }
+    .brand h1 {
+      font-family: var(--font);
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .brand h1 span {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .brand p {
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 40%), var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .panel h2 {
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .view { display: none; animation: rise 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+    .view.active { display: block; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    /* —— Play —— */
+    .yard-hero {
+      background:
+        linear-gradient(160deg, rgba(155, 229, 110, 0.14), transparent 55%),
+        linear-gradient(180deg, rgba(255,255,255,0.03), transparent),
+        var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 20px;
+      padding: 20px 18px 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+    .yard-hero label {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+      font-weight: 600;
+    }
+    .yard-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .yard-input {
+      flex: 1;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-family: var(--num);
+      font-size: 2.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-align: center;
+      outline: none;
+      width: 100%;
+    }
+    .yard-input:focus { border-color: var(--accent); }
+    .yard-unit {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      min-width: 72px;
+    }
+    .unit-btn {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .unit-btn.on {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .quick-yards {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+    }
+    .quick-yards::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-family: var(--num);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .chip:active { background: var(--surface-2); }
+    .chip.on {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .pick {
+      margin-top: 4px;
+    }
+    .pick-club {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 12px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+    .pick-club .name {
+      font-family: var(--num);
+      font-size: 2.4rem;
+      font-weight: 700;
+      line-height: 0.95;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .pick-club .sub {
+      color: var(--muted);
+      font-size: 0.9rem;
+      grid-column: 1;
+    }
+    .pick-club .delta {
+      font-family: var(--num);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-align: right;
+    }
+    .pick-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .stat-tile {
+      background: var(--bg-2);
+      border-radius: 12px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+    .stat-tile .k {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .stat-tile .v {
+      font-family: var(--num);
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+    .alts {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .alt {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--bg-2);
+      border-radius: 12px;
+      border: 1px solid transparent;
+    }
+    .alt strong {
+      font-family: var(--num);
+      font-size: 1.15rem;
+      letter-spacing: 0.03em;
+    }
+    .alt span { color: var(--muted); font-size: 0.85rem; }
+    .tip {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--accent-dim);
+      border-left: 3px solid var(--accent);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+    .tip.warn {
+      background: rgba(232, 184, 109, 0.12);
+      border-left-color: var(--warn);
+    }
+
+    /* —— Bag —— */
+    .bag-list { display: flex; flex-direction: column; gap: 8px; }
+    .bag-row {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 13px 12px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.025), transparent), var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      width: 100%;
+      text-align: left;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .bag-row:active {
+      border-color: var(--accent);
+      transform: scale(0.99);
+    }
+    .bag-id {
+      font-family: var(--num);
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.04em;
+    }
+    .bag-mid .name { font-weight: 600; font-size: 0.95rem; }
+    .bag-mid .meta { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .bag-yards {
+      text-align: right;
+    }
+    .bag-yards .carry {
+      font-family: var(--num);
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .bag-yards .total {
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin-top: 2px;
+    }
+    .bar {
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 99px;
+      margin-top: 8px;
+      overflow: hidden;
+      grid-column: 1 / -1;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #5BBF7A);
+      border-radius: 99px;
+    }
+
+    /* —— Compare —— */
+    .seg {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 14px;
+      background: var(--bg-2);
+      padding: 4px;
+      border-radius: 12px;
+    }
+    .seg button {
+      padding: 10px 6px;
+      border-radius: 9px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .seg button.on {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .compare-row {
+      display: grid;
+      grid-template-columns: 52px 1fr 48px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .compare-row .cid {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--accent);
+    }
+    .track {
+      height: 10px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 99px;
+      position: relative;
+      overflow: visible;
+    }
+    .track.centered {
+      background:
+        linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(232,192,106,0.55) calc(50% - 0.5px), rgba(232,192,106,0.55) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        rgba(255,255,255,0.08);
+    }
+    .track .you {
+      position: absolute;
+      top: 0; bottom: 0; left: 0;
+      background: var(--accent);
+      border-radius: 99px;
+      opacity: 0.9;
+    }
+    .track.centered .you {
+      border-radius: 4px;
+    }
+    .track .mark {
+      position: absolute;
+      top: -3px;
+      width: 3px;
+      height: 16px;
+      background: var(--warn);
+      border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+      z-index: 2;
+    }
+    .compare-row .diff {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: right;
+    }
+    .diff.pos { color: var(--accent); }
+    .diff.neg { color: var(--danger); }
+    .legend {
+      display: flex;
+      gap: 14px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 5px;
+      vertical-align: -1px;
+    }
+
+    /* —— Insights —— */
+    .insight-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .kpi .k {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .kpi .v {
+      font-family: var(--num);
+      font-size: 1.8rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .kpi .s { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+    .profile-copy p {
+      font-size: 0.88rem;
+      line-height: 1.55;
+      color: var(--text);
+      margin: 0 0 12px;
+    }
+    .profile-copy p:last-child { margin-bottom: 0; }
+    .profile-copy strong { color: var(--accent); font-weight: 600; }
+    .call-bullets {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 8px;
+    }
+    .call-bullets li {
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+    }
+    .call-bullets li::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 8px;
+      vertical-align: 2px;
+    }
+    .call-bullets li.warn::before { background: var(--warn); }
+    .tip .call-bullets { margin-top: 4px; gap: 10px; }
+    .tip .call-bullets li {
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.92rem;
+    }
+    .list-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .list-item .left { color: var(--text); }
+    .list-item .right {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 1.05rem;
+      white-space: nowrap;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .badge.ok { background: var(--accent-dim); color: var(--accent); }
+    .badge.warn { background: rgba(232,184,109,0.15); color: var(--warn); }
+    .badge.bad { background: rgba(224,122,106,0.15); color: var(--danger); }
+
+    /* —— Club detail —— */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 40;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+    .sheet {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%) translateY(110%);
+      bottom: 0;
+      width: min(480px, 100%);
+      max-height: 88dvh;
+      overflow: auto;
+      background: var(--bg-2);
+      border-radius: 22px 22px 0 0;
+      border: 1px solid var(--line);
+      border-bottom: none;
+      z-index: 50;
+      padding: 12px 16px calc(24px + var(--safe-bottom));
+      transition: transform 0.28s ease;
+    }
+    .sheet.open { transform: translateX(-50%) translateY(0); }
+    .sheet-handle {
+      width: 40px; height: 4px;
+      background: rgba(255,255,255,0.25);
+      border-radius: 99px;
+      margin: 4px auto 14px;
+    }
+    .sheet-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .sheet-head h3 {
+      font-family: var(--num);
+      font-size: 2rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      line-height: 1;
+    }
+    .sheet-head .close {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: var(--surface);
+      font-size: 1.2rem;
+      color: var(--muted);
+    }
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .vs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-bottom: 8px;
+    }
+    .vs-table th, .vs-table td {
+      padding: 8px 6px;
+      text-align: right;
+      border-bottom: 1px solid var(--line);
+    }
+    .vs-table th:first-child, .vs-table td:first-child { text-align: left; color: var(--muted); }
+    .vs-table th { color: var(--muted); font-weight: 600; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .vs-table .you { color: var(--accent); font-family: var(--num); font-weight: 700; font-size: 1.05rem; }
+
+    /* —— Nav —— */
+    .nav {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 0;
+      width: min(480px, 100%);
+      height: calc(var(--nav-h) + var(--safe-bottom));
+      padding: 10px 8px var(--safe-bottom);
+      background: rgba(7, 17, 14, 0.88);
+      backdrop-filter: blur(18px) saturate(1.2);
+      -webkit-backdrop-filter: blur(18px) saturate(1.2);
+      border-top: 1px solid var(--line-strong);
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      z-index: 30;
+    }
+    .nav button {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 0.62rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 6px 2px;
+      border-radius: 12px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    .nav button.on {
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+    .guide-item { padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .guide-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .guide-item h3 {
+      font-size: 0.92rem;
+      font-weight: 650;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .guide-item h3::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 8px;
+      vertical-align: middle;
+      transform: translateY(-1px);
+    }
+    .guide-item p {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.55;
+      padding-left: 14px;
+    }
+    .nav .ico {
+      font-family: var(--num);
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1;
+      letter-spacing: 0.02em;
+    }
+
+    .empty-hint {
+      color: var(--muted);
+      text-align: center;
+      padding: 24px 12px;
+      font-size: 0.95rem;
+    }
+
+    /* —— GPS —— */
+    .gps-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .gps-status .where { min-width: 0; }
+    .gps-status .course {
+      font-weight: 700;
+      font-size: 1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .gps-status .acc { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .gps-btn {
+      flex: 0 0 auto;
+      background: var(--accent);
+      border: 1px solid transparent;
+      color: #07110E;
+      border-radius: 12px;
+      padding: 10px 16px;
+      font-weight: 700;
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .gps-btn.live {
+      background: rgba(232, 144, 122, 0.16);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    .gps-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+    .gps-btn.live .gps-dot { background: var(--danger); animation: blink 1.2s infinite; }
+    @keyframes blink { 50% { opacity: 0.25; } }
+
+    .hole-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 0 6px;
+      scrollbar-width: none;
+      margin-bottom: 10px;
+    }
+    .hole-strip::-webkit-scrollbar { display: none; }
+    .hole-chip {
+      flex: 0 0 auto;
+      min-width: 44px;
+      padding: 8px 0;
+      text-align: center;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-family: var(--num);
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+    .hole-chip.on {
+      background: var(--accent-dim);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .hole-chip .p { display: block; font-size: 0.6rem; color: var(--muted); font-weight: 600; }
+
+    .fmb {
+      display: grid;
+      grid-template-columns: 1fr 1.35fr 1fr;
+      gap: 10px;
+      align-items: stretch;
+      margin-bottom: 4px;
+    }
+    .fmb .cell {
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 6px 10px;
+      text-align: center;
+    }
+    .fmb .cell.mid {
+      background:
+        linear-gradient(150deg, rgba(143, 217, 168, 0.14), transparent 60%),
+        var(--bg-2);
+      border-color: var(--accent);
+    }
+    .fmb .k {
+      font-size: 0.64rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .fmb .v {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .fmb .cell.mid .v { font-size: 3.1rem; color: var(--accent); }
+    .gps-sub {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-align: center;
+      margin: 10px 0 0;
+    }
+
+    .hole-map {
+      margin-top: 14px;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background:
+        radial-gradient(120% 80% at 50% 18%, rgba(143, 217, 168, 0.1), transparent 55%),
+        #0c1512;
+    }
+    .hole-map[hidden] { display: none; }
+    .hole-map-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px 0;
+    }
+    .hole-map-head .t {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .hole-map-head .leg {
+      font-size: 0.72rem;
+      color: var(--text);
+      font-weight: 600;
+      text-align: right;
+    }
+    .hole-map canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      touch-action: none;
+    }
+    .hole-map-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 8px 12px 2px;
+    }
+    .hole-map-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      padding: 0 12px 10px;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+    .hole-map-foot span::before {
+      content: "";
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: 0;
+    }
+    .hole-map-foot .you::before { background: #5ec8ff; }
+    .hole-map-foot .land::before { background: #f0c14a; }
+    .hole-map-foot .pin::before { background: #e87a6a; }
+    .hole-map-foot .green::before { background: #3d8f5a; border-radius: 2px; }
+
+    .hit-call {
+      margin: 10px 12px 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background:
+        linear-gradient(145deg, rgba(240, 193, 74, 0.18), transparent 70%),
+        var(--bg-2);
+      border: 1px solid rgba(240, 193, 74, 0.45);
+    }
+    .hit-call[hidden] { display: none; }
+    .hit-call .hc-club {
+      font-family: var(--num);
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: #f0c14a;
+      line-height: 1;
+    }
+    .hit-call .hc-main {
+      font-size: 0.92rem;
+      font-weight: 600;
+      margin-top: 4px;
+      color: var(--text);
+    }
+    .hit-call .hc-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 6px;
+      line-height: 1.35;
+    }
+
+    /* —— Pin —— */
+    .pin-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background:
+        linear-gradient(150deg, rgba(224, 122, 106, 0.12), transparent 60%),
+        var(--bg-2);
+      border: 1px solid var(--line);
+    }
+    .pin-bar.set { border-color: var(--danger); }
+    .pin-bar .pin-left { min-width: 0; }
+    .pin-bar .pin-k {
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .pin-bar .pin-v {
+      font-family: var(--num);
+      font-weight: 700;
+      font-size: 1.9rem;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .pin-bar .pin-v small {
+      font-family: var(--font);
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-left: 6px;
+    }
+    .pin-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+    .pin-btn {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 9px 14px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+    .pin-btn.primary {
+      background: rgba(224, 122, 106, 0.16);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    /* —— Map picker —— */
+    .map-wrap {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      background: var(--bg);
+      display: none;
+      flex-direction: column;
+    }
+    .map-wrap.open { display: flex; }
+    .map-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--line);
+    }
+    .map-head h3 {
+      font-family: var(--num);
+      font-size: 1.35rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .map-head .hint { color: var(--muted); font-size: 0.75rem; margin-top: 2px; }
+    #pinMap { flex: 1; width: 100%; background: #0c1512; }
+    .map-foot {
+      display: flex;
+      gap: 10px;
+      padding: 12px 14px calc(14px + var(--safe-bottom));
+      background: var(--bg-2);
+      border-top: 1px solid var(--line);
+    }
+    .map-foot button {
+      flex: 1;
+      border-radius: 12px;
+      padding: 14px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-size: 0.82rem;
+    }
+    .map-foot .cancel { background: var(--surface); color: var(--muted); border: 1px solid var(--line); }
+    .map-foot .save { background: var(--accent); color: #06140D; }
+    .map-crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -100%);
+      z-index: 500;
+      pointer-events: none;
+      font-size: 2rem;
+      filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+    }
+    .leaflet-container { background: #0c1512; font-family: var(--font); }
+    .gps-select {
+      width: 100%;
+      background: var(--bg-2);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 12px;
+      font: inherit;
+      margin-bottom: 10px;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .cond-bar {
+      margin: 0 0 12px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background:
+        linear-gradient(145deg, rgba(126, 184, 232, 0.12), transparent 65%),
+        var(--bg-2);
+      border: 1px solid var(--line);
+    }
+    .cond-bar[hidden] { display: none; }
+    .cond-bar .cond-main {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.35;
+    }
+    .cond-bar .cond-sub {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+
+    @media (min-width: 500px) {
+      .app { padding-top: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="brand">
+      <div class="brand-mark">
+        <div class="brand-icon" aria-hidden="true"></div>
+        <div class="brand-text">
+          <h1>AI <span>Caddie</span></h1>
+          <p>Club calls, Live GPS, Bag intel</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- PLAY -->
+    <section id="view-play" class="view active">
+      <div class="yard-hero">
+        <label for="yards">Yards to target</label>
+        <div class="yard-row">
+          <input id="yards" class="yard-input" type="number" inputmode="numeric" min="40" max="320" placeholder="150" value="150" />
+          <div class="yard-unit">
+            <button type="button" class="unit-btn on" data-mode="carry" id="mode-carry">Carry</button>
+            <button type="button" class="unit-btn" data-mode="total" id="mode-total">Total</button>
+          </div>
+        </div>
+        <div class="quick-yards" id="quickYards"></div>
+      </div>
+
+      <div class="cond-bar" id="playCondBar" hidden>
+        <div class="cond-main" id="playCondMain">Conditions</div>
+        <div class="cond-sub" id="playCondSub"></div>
+      </div>
+
+      <div class="panel pick" id="pickPanel">
+        <h2>Club call</h2>
+        <div id="pickResult"></div>
+      </div>
+    </section>
+
+    <!-- GPS -->
+    <section id="view-gps" class="view">
+      <div class="panel">
+        <div class="gps-status">
+          <div class="where">
+            <div class="course" id="gpsCourseName">Live GPS</div>
+            <div class="acc" id="gpsAcc">GPS off</div>
+          </div>
+          <button type="button" class="gps-btn" id="gpsToggle"><span class="gps-dot"></span>Start</button>
+        </div>
+        <select class="gps-select" id="gpsCourseSel" aria-label="Course"></select>
+        <select class="gps-select" id="gpsTeeSel" aria-label="Tees" hidden></select>
+        <div class="cond-bar" id="condBar" hidden>
+          <div class="cond-main" id="condMain">Loading conditions…</div>
+          <div class="cond-sub" id="condSub"></div>
+        </div>
+        <div class="hole-strip" id="holeStrip"></div>
+        <div class="fmb">
+          <div class="cell"><div class="k">Front</div><div class="v" id="dF">-</div></div>
+          <div class="cell mid"><div class="k">Middle</div><div class="v" id="dM">-</div></div>
+          <div class="cell"><div class="k">Back</div><div class="v" id="dB">-</div></div>
+        </div>
+        <div class="pin-bar" id="pinBar">
+          <div class="pin-left">
+            <div class="pin-k">Pin</div>
+            <div class="pin-v" id="pinV">Not set</div>
+          </div>
+          <div class="pin-actions" id="pinActions">
+            <button type="button" class="pin-btn primary" id="pinSetBtn">Drop pin</button>
+          </div>
+        </div>
+        <div class="hole-map" id="holeMapPanel" hidden>
+          <div class="hit-call" id="hitCall" hidden></div>
+          <div class="hole-map-head">
+            <div class="t" id="holeMapTitle">Hole map</div>
+            <div class="leg" id="holeMapLeg"></div>
+          </div>
+          <div class="hole-map-label">Hole · yellow = land it here</div>
+          <canvas id="holeMapHole" width="720" height="960" aria-label="Hole map with hit target"></canvas>
+          <div class="hole-map-label" id="holeMapGreenLabel">Green · yellow = land it here</div>
+          <canvas id="holeMapGreen" width="720" height="720" aria-label="Green contour with hit target"></canvas>
+          <div class="hole-map-foot">
+            <span class="you">You</span>
+            <span class="land">Hit here</span>
+            <span class="pin">Pin</span>
+            <span class="green">Green</span>
+          </div>
+        </div>
+        <p class="gps-sub" id="gpsSub">Start GPS on the course, or pick a course and hole to see the call.</p>
+      </div>
+
+      <div class="panel pick">
+        <h2 id="gpsPickHead">Club call to middle</h2>
+        <div id="gpsPickResult"><p class="empty-hint">Waiting for a distance…</p></div>
+      </div>
+    </section>
+
+    <!-- BAG -->
+    <section id="view-bag" class="view">
+      <div class="panel" style="margin-bottom:10px">
+        <h2>Stock carry, tap for detail</h2>
+        <p style="color:var(--muted);font-size:0.85rem;margin-top:-6px;margin-bottom:4px">
+          Use carry to the number. Total includes roll.
+        </p>
+      </div>
+      <div class="bag-list" id="bagList"></div>
+    </section>
+
+    <!-- COMPARE -->
+    <section id="view-compare" class="view">
+      <div class="panel">
+        <h2 id="compareHead">Carry vs benchmarks</h2>
+        <div class="seg" id="benchSeg">
+          <button type="button" class="on" data-bench="pga">PGA Tour</button>
+          <button type="button" data-bench="scratch">Scratch</button>
+          <button type="button" data-bench="am10">10 HCP</button>
+        </div>
+        <div id="statSeg" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button type="button" class="chip on" data-stat="carry">Carry</button>
+          <button type="button" class="chip" data-stat="total">Total</button>
+          <button type="button" class="chip" data-stat="ballSpeed">Ball mph</button>
+          <button type="button" class="chip" data-stat="clubSpeed">Club mph</button>
+          <button type="button" class="chip" data-stat="smash">Smash</button>
+          <button type="button" class="chip" data-stat="spin">Spin</button>
+          <button type="button" class="chip" data-stat="apex">Apex</button>
+          <button type="button" class="chip" data-stat="launch">Launch</button>
+          <button type="button" class="chip" data-stat="descent">Descent</button>
+          <button type="button" class="chip" data-stat="horiz">Horiz</button>
+          <button type="button" class="chip" data-stat="face">Face</button>
+          <button type="button" class="chip" data-stat="path">Path</button>
+          <button type="button" class="chip" data-stat="faceToPath">Face/path</button>
+          <button type="button" class="chip" data-stat="sideCarry">Side carry</button>
+          <button type="button" class="chip" data-stat="sideTotal">Side total</button>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--accent)"></i>You</span>
+          <span><i style="background:var(--warn)"></i>Benchmark</span>
+        </div>
+        <div id="compareList"></div>
+      </div>
+      <div class="panel">
+        <h2>Bag snapshot</h2>
+        <div id="snapshot"></div>
+      </div>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section id="view-insights" class="view">
+      <div class="insight-grid" id="kpis"></div>
+      <div class="panel">
+        <h2>Ball striking profile</h2>
+        <div id="strikeProfile" class="profile-copy"></div>
+      </div>
+      <div class="panel">
+        <h2>Swing DNA</h2>
+        <div id="swingDna" class="profile-copy"></div>
+      </div>
+      <div class="panel">
+        <h2>Flight and window</h2>
+        <div id="flightProfile"></div>
+      </div>
+      <div class="panel">
+        <h2>On-course strategy</h2>
+        <div id="notes"></div>
+      </div>
+      <div class="panel">
+        <h2>Gapping (stock carry)</h2>
+        <div id="gaps"></div>
+      </div>
+      <div class="panel">
+        <h2>Most consistent clubs</h2>
+        <div id="consistency"></div>
+      </div>
+      <div class="panel">
+        <h2>Miss and start line</h2>
+        <div id="misses"></div>
+      </div>
+    </section>
+
+    <!-- GUIDE -->
+    <section id="view-guide" class="view">
+      <div class="panel">
+        <h2>How to use each tab</h2>
+        <div class="guide-item">
+          <h3>Play</h3>
+          <p>Type a yardage and get a club call that weighs stock distance, consistency, spin, descent, smash, and your miss pattern. Alternates show trust and curve so you can choose the safer window.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Live</h3>
+          <p>On-course GPS. Tap Start and allow location. It finds your course and hole automatically, shows front, middle, and back of the green, and calls a club. Drop a pin on the satellite map to get distances to the actual hole location instead of the middle. Live weather and elevation at the selected course feed a "plays like" number used for the club call.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Bag</h3>
+          <p>Every club with its stock carry. Tap a club for the full stat sheet: carry, total, window, consistency, speeds, smash, apex, spin, miss pattern, and how each number stacks up against PGA, scratch, and 10-handicap benchmarks.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Compare</h3>
+          <p>Each club against PGA Tour, scratch, or 10-handicap benchmarks for every launch-monitor stat: carry, total, speeds, smash, spin, apex, launch, descent, horiz, face, path, face-to-path, and side. The green bar is you, the yellow mark is the benchmark.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Insights</h3>
+          <p>Ball striking profile, swing DNA (path, face, face to path), flight windows, gapping, consistency, and start/finish miss map. Built from every launch monitor field so strategy matches how you deliver the club.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>What each metric means</h2>
+        <div class="guide-item">
+          <h3>Carry</h3>
+          <p>How far the ball flies in the air before it lands, in yards. This is the number that matters for clearing bunkers, water, and false fronts.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Total</h3>
+          <p>Carry plus roll, where the ball finishes. Use it for tee shots and running approaches.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Stock carry</h3>
+          <p>Your reliable carry for a club, with your best and worst shot trimmed off so one flush strike or one chunk doesn't skew it. Club calls are based on this number.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Window</h3>
+          <p>Your shortest and longest carry with that club. If trouble sits inside the window, the club can find it.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Consistency (0 to 100)</h3>
+          <p>How repeatable your distance is with that club. Higher is tighter. Below about 70, expect a wider spread and favor the safe miss.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Smash factor</h3>
+          <p>Ball speed divided by club speed, a measure of strike quality. Driver around 1.45+ is efficient. A low number means off center contact, not lack of speed.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Spin (rpm)</h3>
+          <p>Backspin rate. Wedges spin high (9k to 10k) and stop fast. Driver spins low (2k to 3k) and runs out. Unusually low spin on an iron usually means a flyer that goes long.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Spin axis / miss bias</h3>
+          <p>Which way your shots curve on average. Negative or "L" means draw/left, positive or "R" means fade/right. Aim to let your typical curve work toward the target.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Apex</h3>
+          <p>Peak height of the shot in feet. Higher apex lands steeper and stops faster. Lower flight runs out more and handles wind better.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Launch / descent / horiz</h3>
+          <p>Launch is the starting angle of the ball. Descent is how steep it comes down. Horiz is left or right launch direction off the target line. Higher launch and steeper descent help irons and wedges stop.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Face, path, face to path</h3>
+          <p>Club path is the direction the head is moving. Face angle is where the face points at impact. Face to path is the difference that creates curve. Positive path is out to in for a right handed player (fade bias). Negative face to path means the face is closed to the path (draw spin).</p>
+        </div>
+        <div class="guide-item">
+          <h3>Side carry / side total</h3>
+          <p>How far left or right of the target line the ball is at landing (side carry) and after it stops (side total). Measured on the launch monitor. This is your real dispersion, not an estimate from spin axis.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Offline / spread</h3>
+          <p>Offline is average yards left or right of the target line. Spread is the width from your furthest left miss to furthest right, the dispersion corridor you need to leave yourself.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Gapping</h3>
+          <p>The yardage difference between neighboring clubs. Ideal is 10 to 15 yards. A big gap leaves in between distances. A small gap means two clubs do the same job.</p>
+        </div>
+        <div class="guide-item">
+          <h3>Plays like</h3>
+          <p>GPS distance adjusted for how the shot will fly today: elevation change to the green (~1 yd per 3 ft) and wind along the shot line. Temperature, humidity, wet turf, and course altitude scale your bag carries. Weather refreshes every 5 minutes. Club calls and bag stats use the adjusted numbers.</p>
+        </div>
+        <div class="guide-item">
+          <h3>F / M / B</h3>
+          <p>Distance to the front, middle, and back of the green. Front tells you what you must carry, back tells you what is too much.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <nav class="nav" aria-label="Main">
+    <button type="button" class="on" data-view="play"><span class="ico">YD</span>Play</button>
+    <button type="button" data-view="gps"><span class="ico">GPS</span>Live</button>
+    <button type="button" data-view="bag"><span class="ico">BAG</span>Bag</button>
+    <button type="button" data-view="compare"><span class="ico">VS</span>Compare</button>
+    <button type="button" data-view="insights"><span class="ico">IQ</span>Insights</button>
+    <button type="button" data-view="guide"><span class="ico">?</span>Guide</button>
+  </nav>
+
+  <div class="map-wrap" id="mapWrap" aria-hidden="true">
+    <div class="map-head">
+      <div>
+        <h3 id="mapTitle">Drop the pin</h3>
+        <div class="hint" id="mapHint">Pinch to zoom, drag the green so the flag sits under the marker</div>
+      </div>
+      <button type="button" class="close" id="mapClose" aria-label="Close" style="width:36px;height:36px;border-radius:50%;background:var(--surface);font-size:1.2rem;color:var(--muted)">×</button>
+    </div>
+    <div id="pinMap">
+      <div class="map-crosshair">📍</div>
+    </div>
+    <div class="map-foot">
+      <button type="button" class="cancel" id="mapCancel">Cancel</button>
+      <button type="button" class="save" id="mapSave">Save pin</button>
+    </div>
+  </div>
+
+  <div class="sheet-backdrop" id="backdrop"></div>
+  <aside class="sheet" id="sheet" aria-hidden="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <div>
+        <h3 id="sheetTitle">Club</h3>
+        <p id="sheetSub" style="color:var(--muted);margin-top:6px;font-size:0.85rem"></p>
+      </div>
+      <button type="button" class="close" id="sheetClose" aria-label="Close">×</button>
+    </div>
+    <div id="sheetBody"></div>
+  </aside>
+
+  <script src="data.js?v=20260728d"></script>
+  <script src="greens.js?v=20260728d"></script>
+  <script src="yardage-map.js?v=20260728d"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    const DATA = window.GOLF_DATA;
+    const clubs = DATA.clubs;
+    const byId = Object.fromEntries(clubs.map(c => [c.id, c]));
+    let maxCarry = Math.max(...clubs.map(c => c.carry));
+
+    let mode = "carry"; // carry | total
+    let bench = "pga"; // pga | scratch | am10
+
+    const $ = (sel, el = document) => el.querySelector(sel);
+    const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
+
+    function fmt(n, d = 0) {
+      return Number(n).toFixed(d);
+    }
+    function signed(n, d = 0) {
+      const v = Number(n);
+      return (v > 0 ? "+" : "") + v.toFixed(d);
+    }
+
+    /* —— Shot deletes (persist across reloads) —— */
+    const DEL_KEY = "bagbook_deleted_shots_v1";
+    function loadDeleted() {
+      try { return JSON.parse(localStorage.getItem(DEL_KEY)) || {}; } catch { return {}; }
+    }
+    function saveDeleted(map) {
+      try { localStorage.setItem(DEL_KEY, JSON.stringify(map)); } catch {}
+    }
+    let deletedShots = loadDeleted(); // { clubId: number[] }
+
+    // Keep pristine shot lists so restores work
+    clubs.forEach(c => {
+      c._allShots = c.shotList.map(s => ({ ...s }));
+      // Club-level launch/path/side can come from a separate monitor view
+      // that did not share shot numbers with the distance view.
+      c._seedAngles = {
+        launch: c.launch ?? null,
+        descent: c.descent ?? null,
+        horiz: c.horiz ?? null,
+        face: c.face ?? null,
+        path: c.path ?? null,
+        faceToPath: c.faceToPath ?? null,
+        sideCarry: c.sideCarry ?? null,
+        sideTotal: c.sideTotal ?? null,
+      };
+    });
+
+    function mean(vals) {
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+    }
+    function sampleStdev(vals) {
+      if (vals.length < 2) return 0;
+      const m = mean(vals);
+      return Math.sqrt(vals.reduce((s, v) => s + (v - m) ** 2, 0) / (vals.length - 1));
+    }
+    function trimmedMean(vals) {
+      if (vals.length <= 2) return mean(vals);
+      const sorted = [...vals].sort((a, b) => a - b);
+      return mean(sorted.slice(1, -1));
+    }
+    function parseAxis(label) {
+      if (label == null || label === "0") return 0;
+      const s = String(label);
+      const n = parseFloat(s);
+      if (!Number.isFinite(n)) return 0;
+      if (s.includes("L")) return -Math.abs(n);
+      if (s.includes("R")) return Math.abs(n);
+      return n;
+    }
+    function missFromAxis(axis) {
+      if (axis <= -2) return "Left / draw";
+      if (axis >= 2) return "Right / fade";
+      return "Neutral";
+    }
+
+    function recomputeClub(c) {
+      const gone = new Set(deletedShots[c.id] || []);
+      const shots = c._allShots.filter(s => !gone.has(s.n));
+      c.shotList = shots;
+      c.shots = shots.length;
+      if (!shots.length) {
+        c.carry = 0; c.stock = 0; c.total = 0;
+        c.min = 0; c.max = 0; c.stdev = 0; c.consistency = 0;
+        c.smash = 0; c.spin = 0; c.apex = 0; c.ballSpeed = 0; c.clubSpeed = 0;
+        c.axis = 0; c.offline = 0; c.spread = 0;
+        c.launch = c._seedAngles?.launch ?? null;
+        c.descent = c._seedAngles?.descent ?? null;
+        c.horiz = c._seedAngles?.horiz ?? null;
+        c.face = c._seedAngles?.face ?? null;
+        c.path = c._seedAngles?.path ?? null;
+        c.faceToPath = c._seedAngles?.faceToPath ?? null;
+        c.sideCarry = c._seedAngles?.sideCarry ?? null;
+        c.sideTotal = c._seedAngles?.sideTotal ?? null;
+        c.miss = "-";
+        c.vsPga = -c.pga.carry; c.vsScratch = -c.scratch; c.vsAm10 = -c.am10;
+        return;
+      }
+      const carries = shots.map(s => s.carry);
+      const totals = shots.map(s => s.total);
+      const axes = shots.map(s => parseAxis(s.axis));
+      const offs = shots.map(s => {
+        if (s.sideTotal != null) return Number(s.sideTotal);
+        if (s.sideCarry != null) return Number(s.sideCarry);
+        return s.offline;
+      });
+      const avgOpt = (key, nd = 1) => {
+        const vals = shots.map(s => s[key]).filter(v => v != null && Number.isFinite(Number(v))).map(Number);
+        if (!vals.length) return null;
+        const v = mean(vals);
+        return nd === 0 ? Math.round(v) : Math.round(v * 10 ** nd) / 10 ** nd;
+      };
+      c.carry = Math.round(mean(carries) * 10) / 10;
+      c.stock = Math.round(trimmedMean(carries) * 10) / 10;
+      c.total = Math.round(mean(totals) * 10) / 10;
+      c.min = Math.min(...carries);
+      c.max = Math.max(...carries);
+      c.stdev = Math.round(sampleStdev(carries) * 10) / 10;
+      c.consistency = Math.max(0, Math.min(100, Math.round(100 - (c.stdev / c.carry) * 400)));
+      c.smash = Math.round(mean(shots.map(s => s.smash)) * 100) / 100;
+      c.spin = Math.round(mean(shots.map(s => s.spin)));
+      c.apex = Math.round(mean(shots.map(s => s.apex ?? 0)) * 10) / 10;
+      c.ballSpeed = Math.round(mean(shots.map(s => s.ballSpeed ?? 0)) * 10) / 10;
+      c.clubSpeed = Math.round(mean(shots.map(s => s.clubSpeed ?? 0)) * 10) / 10;
+      c.axis = Math.round(mean(axes) * 10) / 10;
+      c.launch = avgOpt("launch") ?? c._seedAngles?.launch ?? null;
+      c.descent = avgOpt("descent") ?? c._seedAngles?.descent ?? null;
+      c.horiz = avgOpt("horiz") ?? c._seedAngles?.horiz ?? null;
+      c.face = avgOpt("face") ?? c._seedAngles?.face ?? null;
+      c.path = avgOpt("path") ?? c._seedAngles?.path ?? null;
+      c.faceToPath = avgOpt("faceToPath") ?? c._seedAngles?.faceToPath ?? null;
+      c.sideCarry = avgOpt("sideCarry") ?? c._seedAngles?.sideCarry ?? null;
+      c.sideTotal = avgOpt("sideTotal") ?? c._seedAngles?.sideTotal ?? null;
+      // Prefer measured side total for offline when we have it
+      if (c.sideTotal != null) {
+        c.offline = c.sideTotal;
+        const sides = shots
+          .map(s => (s.sideTotal != null ? Number(s.sideTotal) : s.sideCarry != null ? Number(s.sideCarry) : null))
+          .filter(v => v != null && Number.isFinite(v));
+        c.spread = sides.length
+          ? Math.round((Math.max(...sides) - Math.min(...sides)) * 10) / 10
+          : Math.round((Math.max(...offs) - Math.min(...offs)) * 10) / 10;
+      } else {
+        c.offline = Math.round(mean(offs) * 10) / 10;
+        c.spread = Math.round((Math.max(...offs) - Math.min(...offs)) * 10) / 10;
+      }
+      c.miss = missFromAxis(c.axis);
+      c.vsPga = Math.round((c.carry - c.pga.carry) * 10) / 10;
+      c.vsScratch = Math.round((c.carry - c.scratch) * 10) / 10;
+      c.vsAm10 = Math.round((c.carry - c.am10) * 10) / 10;
+    }
+
+    function recomputeGaps() {
+      DATA.gaps = [];
+      for (let i = 0; i < clubs.length - 1; i++) {
+        DATA.gaps.push({
+          from: clubs[i].id,
+          to: clubs[i + 1].id,
+          gap: Math.round((clubs[i].stock - clubs[i + 1].stock) * 10) / 10,
+        });
+      }
+    }
+
+    function applyDeletes() {
+      clubs.forEach(recomputeClub);
+      recomputeGaps();
+      maxCarry = Math.max(1, ...clubs.map(c => c.carry));
+      const kept = clubs.reduce((s, c) => s + c.shots, 0);
+      DATA.session.shots = kept;
+    }
+
+    applyDeletes();
+
+    /* —— Navigation —— */
+    $$(".nav button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        $$(".nav button").forEach(b => b.classList.remove("on"));
+        btn.classList.add("on");
+        $$(".view").forEach(v => v.classList.remove("active"));
+        $(`#view-${btn.dataset.view}`).classList.add("active");
+      });
+    });
+
+    /* —— Play —— */
+    const quick = [80, 100, 120, 140, 150, 160, 175, 200, 220, 250];
+    const qy = $("#quickYards");
+    quick.forEach(y => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip";
+      b.textContent = y;
+      b.addEventListener("click", () => {
+        $("#yards").value = y;
+        renderPick();
+      });
+      qy.appendChild(b);
+    });
+
+    $$(".unit-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        mode = btn.dataset.mode;
+        $$(".unit-btn").forEach(b => b.classList.toggle("on", b === btn));
+        renderPick();
+      });
+    });
+
+    $("#yards").addEventListener("input", renderPick);
+
+    function clubDistance(c) {
+      const base = mode === "carry" ? c.stock : c.total;
+      return todayYards(base, activeCondCourse(), mode);
+    }
+
+    function avgOf(clubsList, key) {
+      const vals = clubsList.map(c => c[key]).filter(v => v != null && Number.isFinite(Number(v))).map(Number);
+      if (!vals.length) return null;
+      return vals.reduce((a, b) => a + b, 0) / vals.length;
+    }
+
+    function dirLabel(v, unit = "°") {
+      if (v == null || !Number.isFinite(v)) return null;
+      if (Math.abs(v) < 0.4) return `neutral (${fmt(v, 1)}${unit})`;
+      return v > 0 ? `${fmt(v, 1)}${unit} right` : `${fmt(Math.abs(v), 1)}${unit} left`;
+    }
+
+    /** Bag-wide swing and strike model from launch-monitor fields. */
+    function buildPlayerProfile() {
+      const withAngles = clubs.filter(c => c.path != null || c.face != null || c.faceToPath != null);
+      const irons = clubs.filter(c => /i$|PW|AW|SW|60/.test(c.id));
+      const path = avgOf(withAngles, "path");
+      const face = avgOf(withAngles, "face");
+      const ftp = avgOf(withAngles, "faceToPath");
+      const horiz = avgOf(withAngles, "horiz");
+      const side = avgOf(withAngles.length ? withAngles : clubs, "sideTotal")
+        ?? avgOf(clubs, "offline");
+      const axis = avgOf(clubs, "axis");
+      const smash = avgOf(clubs, "smash");
+      const launch = avgOf(withAngles, "launch");
+      const descent = avgOf(withAngles, "descent");
+      const apex = avgOf(clubs, "apex");
+      const spinIron = avgOf(irons.filter(c => ["7i", "8i", "9i", "PW"].includes(c.id)), "spin");
+      const cons = avgOf(clubs, "consistency");
+      const spread = avgOf(clubs, "spread");
+      const driver = byId.Driver;
+      const mid = byId["7i"] || byId["6i"];
+
+      let pathStory = "Path data is limited.";
+      if (path != null) {
+        if (path >= 4) pathStory = `Club path averages ${dirLabel(path)}, an in-to-out delivery that wants the ball to start right and/or draw.`;
+        else if (path <= -4) pathStory = `Club path averages ${dirLabel(path)}, an out-to-in delivery that wants a fade or pull start.`;
+        else pathStory = `Club path is nearly square (${fmt(path, 1)}°). Direction is driven more by face and start line than by a big path bias.`;
+      }
+
+      let faceStory = "";
+      if (face != null && ftp != null) {
+        if (ftp <= -2) faceStory = `Face sits closed to the path by ${fmt(Math.abs(ftp), 1)}° on average, which adds draw spin even when the face is open to the target.`;
+        else if (ftp >= 2) faceStory = `Face sits open to the path by ${fmt(ftp, 1)}°, a fade/cut spin pattern.`;
+        else faceStory = `Face-to-path is nearly matched (${fmt(ftp, 1)}°), so curve is modest when you center the face.`;
+      }
+
+      let missStory = "";
+      if (side != null || axis != null) {
+        const finish = side != null ? dirLabel(side, " yd") : null;
+        const curve = axis != null ? (axis <= -2 ? "draw/hook spin" : axis >= 2 ? "fade/slice spin" : "low curve") : null;
+        const start = horiz != null ? dirLabel(horiz) : null;
+        missStory = [
+          start ? `Typical start line is ${start}` : null,
+          curve ? `with ${curve}` : null,
+          finish ? `and a finish about ${finish} of the line` : null,
+        ].filter(Boolean).join(", ") + ".";
+      }
+
+      let strikeStory = "";
+      if (smash != null && driver) {
+        const drvGap = driver.pga.smash - driver.smash;
+        if (driver.smash >= 1.42) {
+          strikeStory = `Driver smash ${fmt(driver.smash, 2)} is Tour-efficient (PGA ${fmt(driver.pga.smash, 2)}). Contact quality is a strength; distance gap is mostly speed (${fmt(driver.clubSpeed, 0)} mph vs PGA ${driver.pga.cs}).`;
+        } else if (drvGap >= 0.05) {
+          strikeStory = `Driver smash ${fmt(driver.smash, 2)} trails PGA (${fmt(driver.pga.smash, 2)}) by ${fmt(drvGap, 2)}. Centering the face is free distance before you chase more speed.`;
+        } else {
+          strikeStory = `Bag smash averages ${fmt(smash, 2)}. Iron contact is the main lever for predictable windows.`;
+        }
+      }
+
+      let flightStory = "";
+      if (launch != null || descent != null || apex != null) {
+        const bits = [];
+        if (launch != null) bits.push(`launch ${fmt(launch, 1)}°`);
+        if (descent != null) bits.push(`descent ${fmt(descent, 1)}°`);
+        if (apex != null) bits.push(`apex ${fmt(apex, 0)} ft`);
+        flightStory = `Flight window averages ${bits.join(", ")}.`;
+        if (descent != null && descent >= 46) flightStory += " Steep enough to hold greens when spin is healthy.";
+        else if (descent != null && descent < 40) flightStory += " Flatter landings will release more. Plan for run-out on firm surfaces.";
+      }
+
+      if (spinIron != null) {
+        flightStory += ` Mid-iron spin ~${Math.round(spinIron)} rpm.`;
+        if (spinIron < 5500) flightStory += " On the low side for stopping power. Prefer the longer club that can land soft, or play for release.";
+        else if (spinIron > 7500) flightStory += " Strong stopping power. You can take dead aim at tucked pins when the window is clean.";
+      }
+
+      const identity = (() => {
+        const tags = [];
+        if (path != null && path >= 3 && ftp != null && ftp <= -2) tags.push("push-draw pattern");
+        else if (path != null && path <= -3 && ftp != null && ftp >= 2) tags.push("pull-fade pattern");
+        else if (axis != null && axis <= -3) tags.push("draw bias");
+        else if (axis != null && axis >= 3) tags.push("fade bias");
+        if (driver && driver.smash >= 1.42) tags.push("efficient driver strike");
+        if (cons != null && cons >= 78) tags.push("tight distance control");
+        else if (cons != null && cons < 68) tags.push("wide distance windows");
+        if (side != null && Math.abs(side) >= 5) tags.push(side > 0 ? "right finish" : "left finish");
+        return tags.length ? tags.join(", ") : "balanced bag profile";
+      })();
+
+      return {
+        path, face, ftp, horiz, side, axis, smash, launch, descent, apex, spinIron, cons, spread,
+        pathStory, faceStory, missStory, strikeStory, flightStory, identity,
+        driver, mid, withAngles: withAngles.length,
+      };
+    }
+
+    function recommend(target) {
+      const approach = target <= 180;
+      const precision = target <= 140;
+      const scored = clubs.map(c => {
+        const d = clubDistance(c);
+        const rawErr = Math.abs(d - target);
+        let score = rawErr;
+
+        // Prefer tighter clubs when the number is a green shot
+        if (precision) score += Math.max(0, (78 - c.consistency)) * 0.12;
+        if (approach && c.spread != null) score += Math.max(0, c.spread - 12) * 0.08;
+
+        // Carry mode into greens: reward hold (spin + descent + apex)
+        if (mode === "carry" && approach) {
+          if (c.spin >= 7000) score -= 1.2;
+          if (c.descent != null && c.descent >= 46) score -= 0.8;
+          if (c.apex >= 100) score -= 0.5;
+        }
+        // Total mode / runners: prefer lower spin and shallower descent
+        if (mode === "total" && c.spin > 0 && c.spin < 4500) score -= 0.8;
+        if (mode === "total" && c.descent != null && c.descent < 42) score -= 0.5;
+
+        // Slight preference for better smash on longer clubs
+        if (target >= 200 && c.smash >= 1.4) score -= 0.4;
+
+        // Avoid clubs whose stock flies way past unless nothing else fits
+        if (d - target >= 18) score += 3;
+
+        return { club: c, dist: d, err: rawErr, under: d - target, score };
+      }).sort((a, b) => a.score - b.score || a.err - b.err);
+      return scored;
+    }
+
+    function clubCallAdvice(target, ranked, useMode) {
+      const best = ranked[0];
+      const c = best.club;
+      const delta = best.under;
+      const profile = buildPlayerProfile();
+      const bullets = [];
+      let warn = false;
+
+      const roll = Math.round((c.total - c.stock) * 10) / 10;
+      bullets.push({
+        text: `Commit to ${activeCondCourse() ? "today's" : "stock"} ${useMode} ${fmt(best.dist, 0)} yd (${fmt(Math.abs(delta), 0)} yd ${delta >= 0 ? "past" : "short"} of ${fmt(target, 0)}). Window ${fmt(todayYards(c.min, activeCondCourse(), "carry"), 0)} to ${fmt(todayYards(c.max, activeCondCourse(), "carry"), 0)}, ±${fmt(c.stdev, 1)} yd.`,
+        warn: c.consistency < 72,
+      });
+
+      // Aim / curve
+      const side = c.sideTotal ?? c.offline;
+      if (c.faceToPath != null || c.path != null || Math.abs(c.axis) >= 2) {
+        const aimBits = [];
+        if (c.path != null && Math.abs(c.path) >= 2) aimBits.push(`path ${dirLabel(c.path)}`);
+        if (c.face != null) aimBits.push(`face ${dirLabel(c.face)}`);
+        if (c.faceToPath != null) {
+          aimBits.push(c.faceToPath <= -1.5
+            ? `face closed to path ${fmt(Math.abs(c.faceToPath), 1)}° (draw spin)`
+            : c.faceToPath >= 1.5
+              ? `face open to path ${fmt(c.faceToPath, 1)}° (fade spin)`
+              : `face-to-path nearly matched`);
+        }
+        let aim = `Shape: ${aimBits.join("; ") || c.miss}.`;
+        if (side != null && Math.abs(side) >= 3) {
+          warn = true;
+          aim += ` Expect finish ~${dirLabel(side, " yd")}. Aim the opposite edge of the safe side and let the pattern work.`;
+        } else if (Math.abs(c.axis) >= 3) {
+          warn = true;
+          aim += ` Leave room for the ${c.miss.toLowerCase()} miss.`;
+        } else {
+          aim += " Start line can be aggressive if the landing zone is open.";
+        }
+        bullets.push({ text: aim, warn: Math.abs(side || 0) >= 5 || Math.abs(c.axis) >= 4 });
+      }
+
+      // Strike / flight for this club
+      const flight = [];
+      if (c.smash) flight.push(`smash ${fmt(c.smash, 2)}`);
+      if (c.launch != null) flight.push(`launch ${fmt(c.launch, 1)}°`);
+      if (c.descent != null) flight.push(`descent ${fmt(c.descent, 1)}°`);
+      if (c.apex) flight.push(`apex ${fmt(c.apex, 0)}'`);
+      if (c.spin) flight.push(`${c.spin} rpm`);
+      if (flight.length) {
+        let f = `Strike and flight: ${flight.join(", ")}.`;
+        if (useMode === "carry" && target <= 160) {
+          if (c.spin >= 7000 && (c.descent == null || c.descent >= 45)) {
+            f += " Holds greens. You can take a tighter line at the pin.";
+          } else if (c.spin < 5500 || (c.descent != null && c.descent < 42)) {
+            warn = true;
+            f += " Will release. Land short of a back pin or take one less and flight it.";
+          }
+        }
+        if (useMode === "total" && roll >= 8) {
+          f += ` Plan ~${fmt(roll, 0)} yd of roll after carry.`;
+        }
+        bullets.push({ text: f, warn: false });
+      }
+
+      // Partial / between clubs
+      const between = ranked[0].err > 6 && ranked[1] && Math.abs(ranked[0].err - ranked[1].err) < 5;
+      if (delta >= 14) {
+        warn = true;
+        bullets.push({
+          text: `${c.id} is a partial. Grip down, ball slightly back, 80 to 90% tempo. Do not help it.`,
+          warn: true,
+        });
+      } else if (between) {
+        const alt = ranked[1].club;
+        bullets.push({
+          text: `Close call with ${alt.id} (${fmt(ranked[1].dist, 0)} yd, consistency ${alt.consistency}). Prefer ${c.consistency >= alt.consistency ? c.id : alt.id} when you need the tighter window; take the longer stock into wind or soft turf.`,
+          warn: true,
+        });
+      }
+
+      // Bag pattern reminder on longer clubs
+      if (target >= 200 && profile.side != null && Math.abs(profile.side) >= 4) {
+        bullets.push({
+          text: `Bag pattern finishes ${dirLabel(profile.side, " yd")} on average. Tee and aim so the wide side of the hole matches that miss.`,
+          warn: true,
+        });
+      }
+
+      if (c.consistency >= 80) {
+        bullets.push({ text: `High trust club (consistency ${c.consistency}/100). Good choice when the shot demands a number.`, warn: false });
+      } else if (c.consistency < 68) {
+        warn = true;
+        bullets.push({ text: `Lower trust (±${fmt(c.stdev, 1)} yd). Play the fat side of the green and avoid short-siding yourself.`, warn: true });
+      }
+
+      return { bullets, warn, profile };
+    }
+
+    function clubCallHtml(target, ranked, useMode) {
+      const best = ranked[0];
+      const alts = ranked.slice(1, 3);
+      const c = best.club;
+      const delta = best.under;
+      const deltaLabel = delta >= 0
+        ? `${fmt(delta, 0)} yd long`
+        : `${fmt(Math.abs(delta), 0)} yd short`;
+      const advice = clubCallAdvice(target, ranked, useMode);
+      const tipClass = advice.warn ? "tip warn" : "tip";
+
+      return `
+        <div class="pick-club">
+          <div class="name">${c.id}</div>
+          <div class="delta">${signed(delta, 0)}</div>
+          <div class="sub">${c.name}, ${deltaLabel} of target · ${c.miss}</div>
+        </div>
+        <div class="pick-meta">
+          <div class="stat-tile"><div class="k">Stock ${useMode}</div><div class="v">${fmt(best.dist, 0)}</div></div>
+          <div class="stat-tile"><div class="k">Bag ${useMode}</div><div class="v">${fmt(useMode === "carry" ? c.stock : c.total, 0)}</div></div>
+          <div class="stat-tile"><div class="k">Window</div><div class="v">${fmt(c.min, 0)}-${fmt(c.max, 0)}</div></div>
+          <div class="stat-tile"><div class="k">Consistency</div><div class="v">${c.consistency}</div></div>
+          <div class="stat-tile"><div class="k">Smash</div><div class="v">${fmt(c.smash, 2)}</div></div>
+          <div class="stat-tile"><div class="k">Spin</div><div class="v">${c.spin}</div></div>
+          <div class="stat-tile"><div class="k">Apex</div><div class="v">${fmt(c.apex, 0)}'</div></div>
+          <div class="stat-tile"><div class="k">Launch</div><div class="v">${c.launch != null ? fmt(c.launch, 1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Descent</div><div class="v">${c.descent != null ? fmt(c.descent, 1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Path</div><div class="v">${c.path != null ? signed(c.path, 1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Face/path</div><div class="v">${c.faceToPath != null ? signed(c.faceToPath, 1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Side</div><div class="v">${(c.sideTotal ?? c.offline) != null ? signed(c.sideTotal ?? c.offline, 1) : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Spread</div><div class="v">${fmt(c.spread, 1)}</div></div>
+        </div>
+        <div class="alts">
+          ${alts.map(a => `
+            <div class="alt">
+              <div>
+                <strong>${a.club.id}</strong>
+                <div style="color:var(--muted);font-size:0.8rem;margin-top:2px">${a.club.name} · cons ${a.club.consistency} · ${a.club.miss}</div>
+              </div>
+              <span>${fmt(a.dist, 0)} yd, ${signed(a.under, 0)}</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="${tipClass}">
+          <div style="font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;opacity:0.85;margin-bottom:6px">Caddie call</div>
+          <ul class="call-bullets">
+            ${advice.bullets.map(b => `<li class="${b.warn ? "warn" : ""}">${b.text}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderPick() {
+      const raw = Number($("#yards").value);
+      const box = $("#pickResult");
+      renderPlayCond();
+      if (!raw || raw < 40) {
+        box.innerHTML = `<p class="empty-hint">Enter a yardage to get a club call.</p>`;
+        return;
+      }
+      const ranked = recommend(raw);
+      box.innerHTML = clubCallHtml(raw, ranked, mode);
+    }
+
+    /* —— Bag —— */
+    function renderBag() {
+      const list = $("#bagList");
+      const course = activeCondCourse();
+      list.innerHTML = clubs.map(c => {
+        const today = todayYards(c.stock, course, "carry");
+        const todayTot = todayYards(c.total, course, "total");
+        const showToday = course && Math.abs(today - c.stock) >= 0.5;
+        return `
+        <button type="button" class="bag-row" data-club="${c.id}">
+          <div class="bag-id">${c.id}</div>
+          <div class="bag-mid">
+            <div class="name">${c.name}</div>
+            <div class="meta">${c.miss}, ${c.spin} rpm, ${fmt(c.apex,0)}' apex${showToday ? ` · today ${fmt(today, 0)}` : ""}</div>
+          </div>
+          <div class="bag-yards">
+            <div class="carry">${fmt(showToday ? today : c.stock, 0)}</div>
+            <div class="total">${showToday ? `bag ${fmt(c.stock, 0)} · ` : ""}total ${fmt(showToday ? todayTot : c.total, 0)}</div>
+          </div>
+          <div class="bar"><i style="width:${((showToday ? today : c.stock) / maxCarry) * 100}%"></i></div>
+        </button>`;
+      }).join("");
+      $$(".bag-row", list).forEach(btn => {
+        btn.addEventListener("click", () => openClub(btn.dataset.club));
+      });
+    }
+
+    /* —— Compare —— */
+    let compareStat = "carry";
+    const COMPARE_STATS = {
+      carry:     { label: "Carry",     unit: "yd",  dec: 0, you: c => todayYards(c.carry, activeCondCourse(), "carry"), pga: c => c.pga.carry, est: s => s.carry },
+      total:     { label: "Total",     unit: "yd",  dec: 0, you: c => todayYards(c.total, activeCondCourse(), "total"), pga: c => c.pga.total, est: s => s.total },
+      ballSpeed: { label: "Ball speed", unit: "mph", dec: 0, you: c => c.ballSpeed, pga: c => c.pga.bs,    est: s => s.bs },
+      clubSpeed: { label: "Club speed", unit: "mph", dec: 0, you: c => c.clubSpeed, pga: c => c.pga.cs,    est: s => s.cs },
+      smash:     { label: "Smash",     unit: "",    dec: 2, you: c => c.smash,     pga: c => c.pga.smash, est: s => s.smash },
+      spin:      { label: "Spin",      unit: "rpm", dec: 0, you: c => c.spin,      pga: c => c.pga.spin,  est: s => s.spin },
+      apex:      { label: "Apex",      unit: "ft",  dec: 0, you: c => c.apex,      pga: c => c.pga.apex, est: s => s.apex },
+      launch:    { label: "Launch",    unit: "°",   dec: 1, you: c => c.launch,    pga: c => c.pga.launch,    est: s => s.launch },
+      descent:   { label: "Descent",   unit: "°",   dec: 1, you: c => c.descent,   pga: c => c.pga.descent,   est: s => s.descent },
+      horiz:     { label: "Horiz",     unit: "°",   dec: 1, you: c => c.horiz,     pga: c => c.pga.horiz,     est: s => s.horiz },
+      face:      { label: "Face",      unit: "°",   dec: 1, you: c => c.face,      pga: c => c.pga.face,      est: s => s.face },
+      path:      { label: "Club path", unit: "°",   dec: 1, you: c => c.path,      pga: c => c.pga.path,      est: s => s.path },
+      faceToPath:{ label: "Face to path", unit: "°", dec: 1, you: c => c.faceToPath, pga: c => c.pga.faceToPath, est: s => s.faceToPath },
+      sideCarry: { label: "Side carry", unit: "yd", dec: 1, you: c => c.sideCarry, pga: c => c.pga.sideCarry, est: s => s.sideCarry },
+      sideTotal: { label: "Side total", unit: "yd", dec: 1, you: c => c.sideTotal ?? c.offline, pga: c => c.pga.sideTotal, est: s => s.sideTotal },
+    };
+
+    $$("#benchSeg button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        bench = btn.dataset.bench;
+        $$("#benchSeg button").forEach(b => b.classList.toggle("on", b === btn));
+        renderCompare();
+      });
+    });
+    $$("#statSeg button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        compareStat = btn.dataset.stat;
+        $$("#statSeg button").forEach(b => b.classList.toggle("on", b === btn));
+        renderCompare();
+      });
+    });
+
+    function benchValue(c) {
+      const st = COMPARE_STATS[compareStat];
+      if (bench === "pga") return st.pga(c);
+      return st.est(benchStats(c, bench === "scratch" ? "scratch" : "am10"));
+    }
+
+    const COMPARE_CENTERED = new Set(["horiz", "face", "path", "faceToPath", "sideCarry", "sideTotal"]);
+
+    function benchLabel() {
+      return { pga: "PGA Tour", scratch: "Scratch", am10: "10 HCP" }[bench];
+    }
+
+    function renderCompare() {
+      const st = COMPARE_STATS[compareStat];
+      const centered = COMPARE_CENTERED.has(compareStat);
+      const hasBench = clubs.some(c => {
+        const b = benchValue(c);
+        return b != null && Number.isFinite(b);
+      });
+      $("#compareHead").textContent = hasBench
+        ? `${st.label} vs ${benchLabel()}`
+        : `${st.label} (your bag)`;
+      const vals = clubs.map(c => {
+        const you = st.you(c);
+        const b = benchValue(c);
+        return Math.max(Math.abs(you || 0), Math.abs(b || 0) || 0);
+      });
+      const scale = Math.max(1, ...vals) * 1.15;
+      $("#compareList").innerHTML = clubs.map(c => {
+        const you = st.you(c);
+        const b = benchValue(c);
+        const showYou = you != null && Number.isFinite(you);
+        const showB = hasBench && b != null && Number.isFinite(b);
+        const d = showYou && showB ? you - b : null;
+        let trackInner = "";
+        if (centered) {
+          if (showYou) {
+            const w = Math.min(50, (Math.abs(you) / scale) * 50);
+            const left = you >= 0 ? 50 : 50 - w;
+            trackInner += `<div class="you" style="left:${left}%;width:${Math.max(w, 1.2)}%"></div>`;
+          }
+          if (showB) {
+            const left = Math.max(0, Math.min(100, 50 + (b / scale) * 50));
+            trackInner += `<div class="mark" style="left:calc(${left}% - 1px)"></div>`;
+          }
+        } else {
+          const youPct = showYou ? Math.min(100, (Math.abs(you) / scale) * 100) : 0;
+          if (showYou) trackInner += `<div class="you" style="width:${youPct}%"></div>`;
+          if (showB) {
+            const markPct = Math.max(1.5, Math.min(100, (Math.abs(b) / scale) * 100));
+            trackInner += `<div class="mark" style="left:calc(${markPct}% - 1px)"></div>`;
+          }
+        }
+        const unit = st.unit || "";
+        const diffHtml = !showYou
+          ? "—"
+          : showB
+            ? `${signed(d, st.dec)}${unit}`
+            : `${signed(you, st.dec)}${unit}`;
+        const diffClass = d == null ? ""
+          : centered
+            ? (Math.abs(you) <= Math.abs(b) + 0.05 ? "pos" : "neg")
+            : d >= 0 ? "pos" : "neg";
+        return `
+          <div class="compare-row">
+            <div class="cid">${c.id}</div>
+            <div class="track${centered ? " centered" : ""}">${trackInner}</div>
+            <div class="diff ${diffClass}">${diffHtml}</div>
+          </div>
+        `;
+      }).join("");
+
+      if (!hasBench) {
+        const present = clubs.filter(c => st.you(c) != null && Number.isFinite(st.you(c)));
+        const avg = present.length ? present.reduce((s, c) => s + st.you(c), 0) / present.length : 0;
+        $("#snapshot").innerHTML = `
+          <div class="list-item"><span class="left">Clubs with ${st.label.toLowerCase()}</span><span class="right">${present.length} / ${clubs.length}</span></div>
+          <div class="list-item"><span class="left">Bag average</span><span class="right">${signed(avg, st.dec)}${st.unit ? " " + st.unit : ""}</span></div>
+          <div class="list-item"><span class="left">Note</span><span class="right" style="color:var(--muted)">No tour benchmark for this stat</span></div>
+        `;
+        return;
+      }
+
+      const present = clubs.filter(c => {
+        const you = st.you(c);
+        return you != null && Number.isFinite(you) && Number.isFinite(benchValue(c));
+      });
+      const diffs = present.map(c => st.you(c) - benchValue(c));
+      const avgVs = diffs.length ? diffs.reduce((s, x) => s + x, 0) / diffs.length : 0;
+      const unit = st.unit ? ` ${st.unit}` : "";
+      if (centered) {
+        const closer = present.filter(c => Math.abs(st.you(c)) <= Math.abs(benchValue(c)) + 0.05).length;
+        $("#snapshot").innerHTML = `
+          <div class="list-item"><span class="left">Avg ${st.label.toLowerCase()} vs ${benchLabel()}</span><span class="right">${signed(avgVs, st.dec)}${unit}</span></div>
+          <div class="list-item"><span class="left">Target</span><span class="right" style="color:var(--muted)">Straight (0${(st.unit || "").trim()})</span></div>
+          <div class="list-item"><span class="left">Clubs at or inside target</span><span class="right">${closer} / ${present.length}</span></div>
+          <div class="list-item"><span class="left">Yellow mark</span><span class="right" style="color:var(--muted)">Benchmark at center</span></div>
+        `;
+        return;
+      }
+      const longer = diffs.filter(x => x >= 0).length;
+      $("#snapshot").innerHTML = `
+        <div class="list-item"><span class="left">Avg ${st.label.toLowerCase()} vs ${benchLabel()}</span><span class="right ${avgVs>=0?"pos":""}" style="color:${avgVs>=0?"var(--accent)":"var(--danger)"}">${signed(avgVs, st.dec === 2 ? 2 : 1)}${unit}</span></div>
+        <div class="list-item"><span class="left">Clubs at or above</span><span class="right">${longer} / ${present.length}</span></div>
+        <div class="list-item"><span class="left">Driver vs PGA</span><span class="right">${signed(byId.Driver.vsPga,0)} yd carry</span></div>
+        <div class="list-item"><span class="left">7i vs PGA</span><span class="right">${signed(byId["7i"].vsPga,0)} yd (tour avg ${byId["7i"].pga.carry})</span></div>
+        <div class="list-item"><span class="left">Driver smash</span><span class="right">${fmt(byId.Driver.smash,2)} / PGA ${fmt(byId.Driver.pga.smash,2)}</span></div>
+        <div class="list-item"><span class="left">Driver speed</span><span class="right">${fmt(byId.Driver.clubSpeed,0)} mph / PGA ${byId.Driver.pga.cs}</span></div>
+      `;
+    }
+
+    /* —— Insights —— */
+    function renderInsights() {
+      const p = buildPlayerProfile();
+      const bestCons = [...clubs].sort((a, b) => b.consistency - a.consistency)[0];
+      const worstCons = [...clubs].sort((a, b) => a.consistency - b.consistency)[0];
+      const widestGap = [...DATA.gaps].sort((a, b) => b.gap - a.gap)[0];
+      const tightestDisp = [...clubs].filter(c => c.spread != null).sort((a, b) => a.spread - b.spread)[0];
+      const widestDisp = [...clubs].filter(c => c.spread != null).sort((a, b) => b.spread - a.spread)[0];
+      const bestSmash = [...clubs].sort((a, b) => b.smash - a.smash)[0];
+
+      $("#kpis").innerHTML = `
+        <div class="kpi"><div class="k">Profile</div><div class="v" style="font-size:1.05rem;line-height:1.3">${p.identity.split(", ")[0]}</div><div class="s">${p.identity}</div></div>
+        <div class="kpi"><div class="k">Driver carry</div><div class="v">${fmt(todayYards(byId.Driver.stock, activeCondCourse(), "carry"),0)}</div><div class="s">${signed(byId.Driver.vsPga,0)} vs PGA · smash ${fmt(byId.Driver.smash,2)}${activeCondCourse() ? " · today" : ""}</div></div>
+        <div class="kpi"><div class="k">7-iron carry</div><div class="v">${fmt(todayYards(byId["7i"].stock, activeCondCourse(), "carry"),0)}</div><div class="s">${signed(byId["7i"].vsPga,0)} vs PGA · ${byId["7i"].spin} rpm${activeCondCourse() ? " · today" : ""}</div></div>
+        <div class="kpi"><div class="k">Shots in bag</div><div class="v">${DATA.session.shots}</div><div class="s">${DATA.session.label || "Combined sessions"}${DATA.session.session4 ? ` · +${DATA.session.session4} latest` : DATA.session.session3 ? ` · +${DATA.session.session3} s3` : ""}</div></div>
+      `;
+
+      const strikeParas = [];
+      strikeParas.push(`<p><strong>Strike quality.</strong> ${p.strikeStory || "Smash and speed data paint your contact profile club by club."} Best smash in the bag: <strong>${bestSmash.id}</strong> at ${fmt(bestSmash.smash, 2)}.</p>`);
+      if (p.mid) {
+        const midVs = p.mid.vsPga;
+        strikeParas.push(`<p><strong>Iron engine.</strong> Your ${p.mid.id} carries ${fmt(p.mid.carry, 0)} yd (${signed(midVs, 0)} vs PGA ${p.mid.pga.carry}). Ball speed ${fmt(p.mid.ballSpeed, 0)} mph at ${fmt(p.mid.clubSpeed, 0)} mph club speed. That is ${midVs >= -5 ? "Tour-adjacent length" : "solid amateur length with room to grow through speed or smash"} with a consistency score of ${p.mid.consistency}/100 (±${fmt(p.mid.stdev, 1)} yd).</p>`);
+      }
+      if (p.spinIron != null) {
+        strikeParas.push(`<p><strong>Spin loft picture.</strong> Mid-iron spin averages ~${Math.round(p.spinIron)} rpm. ${p.spinIron >= 7000 ? "You generate enough spin to attack pins when descent is steep." : p.spinIron >= 5500 ? "Spin is functional. Favor the center of the green when turf is firm." : "Spin is light for iron hold. Prefer higher-loft options or land short and release."}</p>`);
+      }
+      strikeParas.push(`<p><strong>Distance control.</strong> Bag consistency averages ${fmt(p.cons, 0)}/100 across ${DATA.session.shots} shots (both range sessions combined where you retested). Tightest: <strong>${bestCons.id}</strong> (±${fmt(bestCons.stdev, 1)} yd). Widest: <strong>${worstCons.id}</strong> (±${fmt(worstCons.stdev, 1)} yd). Use high-trust clubs when the number must be exact.</p>`);
+      $("#strikeProfile").innerHTML = strikeParas.join("");
+
+      const swingParas = [];
+      swingParas.push(`<p><strong>Delivery.</strong> ${p.pathStory} ${p.faceStory}</p>`);
+      if (p.missStory) swingParas.push(`<p><strong>Start and finish.</strong> ${p.missStory}</p>`);
+      if (p.path != null && p.ftp != null) {
+        const pattern =
+          p.path > 2 && p.ftp < -1.5 ? "Classic in-to-out with face closed to path: draw spin with a rightward bias if the face is still open to the target (push-draw)."
+          : p.path < -2 && p.ftp > 1.5 ? "Out-to-in with face open to path: fade/cut pattern (pull-fade if face is left of the target)."
+          : "Path and face are relatively matched. Curve comes more from face aim and strike location than from a large path/face split.";
+        swingParas.push(`<p><strong>Pattern label.</strong> ${pattern} Build every tee and approach plan around that miss, not the opposite one.</p>`);
+      }
+      if (p.withAngles < 4) {
+        swingParas.push(`<p><strong>Data note.</strong> Angle and path numbers are strongest on the clubs from your latest monitor session. Keep updating those fields as you retest.</p>`);
+      }
+      $("#swingDna").innerHTML = swingParas.join("");
+
+      const flightRows = [];
+      if (p.flightStory) flightRows.push(`<div class="list-item"><span class="left">${p.flightStory}</span></div>`);
+      if (tightestDisp && widestDisp) {
+        flightRows.push(`<div class="list-item"><span class="left">Tightest lateral window</span><span class="right">${tightestDisp.id} · ${fmt(tightestDisp.spread, 1)} yd</span></div>`);
+        flightRows.push(`<div class="list-item"><span class="left">Widest lateral window</span><span class="right">${widestDisp.id} · ${fmt(widestDisp.spread, 1)} yd</span></div>`);
+      }
+      clubs.filter(c => c.launch != null).slice(0, 6).forEach(c => {
+        flightRows.push(`<div class="list-item"><span class="left">${c.id} flight</span><span class="right">${fmt(c.launch,1)}° / ${c.descent != null ? fmt(c.descent,1) + "°" : "—"} / ${fmt(c.apex,0)}'</span></div>`);
+      });
+      $("#flightProfile").innerHTML = flightRows.join("") || `<p class="empty-hint">Add launch and descent data to unlock flight insights.</p>`;
+
+      const notes = [];
+      notes.push({
+        t: `Identity: ${p.identity}. Play the hole that matches that miss. Do not aim for a miss you do not own.`,
+        ok: true,
+      });
+      if (p.side != null && Math.abs(p.side) >= 4) {
+        notes.push({
+          t: `Bag finishes ${dirLabel(p.side, " yd")} on average. On tee shots, put the wide side of the fairway on that miss and tee accordingly.`,
+          ok: false,
+        });
+      }
+      if (widestGap && widestGap.gap >= 16) {
+        notes.push({
+          t: `Gap ${widestGap.from} to ${widestGap.to} is ${fmt(widestGap.gap, 0)} yd. Decide early: more club smooth, or commit to a flighted shorter club.`,
+          ok: false,
+        });
+      }
+      if (byId.Driver && byId.Driver.smash >= 1.42 && byId.Driver.vsPga <= -15) {
+        notes.push({
+          t: `Driver contact is efficient (smash ${fmt(byId.Driver.smash, 2)}). The Tour gap is speed (${fmt(byId.Driver.clubSpeed, 0)} vs ${byId.Driver.pga.cs} mph), not strike. On course, prioritize fairways over swinging out of your shoes.`,
+          ok: true,
+        });
+      }
+      if (byId.AW && byId.PW) {
+        const gap = Math.abs(byId.PW.stock - byId.AW.stock);
+        notes.push({
+          t: `PW (${fmt(byId.PW.stock, 0)}) and AW (${fmt(byId.AW.stock, 0)}) are ${fmt(gap, 0)} yd apart. Choose by trajectory and spin need, not by a big distance jump.`,
+          ok: true,
+        });
+      }
+      const holdClubs = clubs.filter(c => c.spin >= 7000 && (c.descent == null || c.descent >= 45));
+      if (holdClubs.length) {
+        notes.push({
+          t: `Best holding clubs: ${holdClubs.slice(0, 4).map(c => c.id).join(", ")}. Use these when the pin is tucked and the surface is firm.`,
+          ok: true,
+        });
+      }
+      const releaseClubs = clubs.filter(c => c.spin > 0 && c.spin < 5000 && c.stock >= 160);
+      if (releaseClubs.length) {
+        notes.push({
+          t: `Release clubs: ${releaseClubs.map(c => c.id).join(", ")}. Land short of back pins or switch to total-mode planning.`,
+          ok: false,
+        });
+      }
+      if (p.path != null && p.path >= 4) {
+        notes.push({
+          t: `In-to-out path (~${fmt(p.path, 1)}°). Feel is "cover the ball / left side of the grip," not a bigger cut. Fighting the path usually doubles the miss.`,
+          ok: false,
+        });
+      }
+
+      $("#notes").innerHTML = notes.map(n => `
+        <div class="list-item">
+          <span class="left">${n.t}</span>
+          <span class="badge ${n.ok ? "ok" : "warn"}">${n.ok ? "Play" : "Plan"}</span>
+        </div>
+      `).join("");
+
+      $("#gaps").innerHTML = DATA.gaps.map(g => {
+        const wide = g.gap >= 16;
+        return `<div class="list-item">
+          <span class="left">${g.from} → ${g.to}</span>
+          <span class="right" style="color:${wide ? "var(--warn)" : "var(--text)"}">${fmt(g.gap,1)} yd${wide ? " wide" : ""}</span>
+        </div>`;
+      }).join("");
+
+      const byCons = [...clubs].sort((a, b) => b.consistency - a.consistency);
+      $("#consistency").innerHTML = byCons.map(c => `
+        <div class="list-item">
+          <span class="left">${c.id} <span style="color:var(--muted)">±${fmt(c.stdev,1)} yd · smash ${fmt(c.smash,2)}</span></span>
+          <span class="right">${c.consistency}</span>
+        </div>
+      `).join("");
+
+      $("#misses").innerHTML = clubs.map(c => {
+        const side = c.sideTotal ?? c.offline;
+        const color = (side != null ? side : c.axis) <= -2 ? "var(--left)"
+          : (side != null ? side : c.axis) >= 2 ? "var(--right)" : "var(--muted)";
+        const detail = [
+          c.miss,
+          c.axis != null ? `axis ${signed(c.axis, 1)}°` : null,
+          side != null ? `side ${signed(side, 1)}` : null,
+          c.horiz != null ? `start ${signed(c.horiz, 1)}°` : null,
+          c.faceToPath != null ? `ftp ${signed(c.faceToPath, 1)}°` : null,
+        ].filter(Boolean).join(" · ");
+        return `<div class="list-item">
+          <span class="left">${c.id}</span>
+          <span class="right" style="color:${color};font-size:0.78rem;text-align:right;max-width:62%">${detail}</span>
+        </div>`;
+      }).join("");
+    }
+
+    /* —— Club sheet —— */
+
+    /**
+     * Full benchmark stat lines for scratch and 10-HCP players.
+     * Distance / speed scaled from TrackMan PGA; launch / descent use typical
+     * amateur offsets; delivery angles target straight (0) at every level.
+     */
+    function benchStats(c, tier) {
+      const carry = tier === "scratch" ? c.scratch : c.am10;
+      const k = carry / c.pga.carry;
+      const smash = Math.max(1.0, c.pga.smash - (tier === "scratch" ? 0.02 : 0.06));
+      const bs = c.pga.bs * k;
+      const isDrv = c.id === "Driver" || c.id === "3W";
+      const launchOff = tier === "scratch" ? (isDrv ? 1.0 : 0.5) : (isDrv ? 2.5 : 1.5);
+      const descOff = tier === "scratch" ? (isDrv ? 2.0 : 1.0) : (isDrv ? 4.0 : 2.0);
+      return {
+        carry,
+        total: Math.round(c.pga.total * k),
+        bs: Math.round(bs),
+        cs: Math.round(bs / smash),
+        smash,
+        spin: Math.round(c.pga.spin * (tier === "scratch" ? 1 : 1.05) / 10) * 10,
+        apex: Math.round(c.pga.apex * (tier === "scratch" ? 0.95 : 0.88)),
+        launch: c.pga.launch != null ? Math.round((c.pga.launch + launchOff) * 10) / 10 : null,
+        descent: c.pga.descent != null ? Math.round((c.pga.descent - descOff) * 10) / 10 : null,
+        attack: c.pga.attack != null ? Math.round((c.pga.attack + (tier === "scratch" ? 0.3 : 0.8)) * 10) / 10 : null,
+        face: 0,
+        path: 0,
+        faceToPath: 0,
+        horiz: 0,
+        sideCarry: 0,
+        sideTotal: 0,
+      };
+    }
+
+    function openClub(id) {
+      const c = byId[id];
+      if (!c) return;
+      const removed = (deletedShots[id] || []).length;
+      const sc = benchStats(c, "scratch");
+      const am = benchStats(c, "am10");
+      const course = activeCondCourse();
+      const todayC = todayYards(c.stock, course, "carry");
+      const todayT = todayYards(c.total, course, "total");
+      const todayAvg = todayYards(c.carry, course, "carry");
+      const showToday = course && Math.abs(todayC - c.stock) >= 0.5;
+      $("#sheetTitle").textContent = c.id;
+      $("#sheetSub").textContent = `${c.name}, ${c.shots} shots${removed ? `, ${removed} removed` : ""}${showToday ? ` · today at ${course.name}` : ""}`;
+      $("#sheetBody").innerHTML = `
+        <div class="metric-grid">
+          ${showToday ? `<div class="stat-tile"><div class="k">Today carry</div><div class="v">${fmt(todayC,0)}</div></div>
+          <div class="stat-tile"><div class="k">Today total</div><div class="v">${fmt(todayT,0)}</div></div>` : ""}
+          <div class="stat-tile"><div class="k">Stock carry</div><div class="v">${fmt(c.stock,0)}</div></div>
+          <div class="stat-tile"><div class="k">Avg carry</div><div class="v">${fmt(showToday ? todayAvg : c.carry,0)}</div></div>
+          <div class="stat-tile"><div class="k">Avg total</div><div class="v">${fmt(showToday ? todayT : c.total,0)}</div></div>
+          <div class="stat-tile"><div class="k">Window</div><div class="v">${fmt(todayYards(c.min, course, "carry"),0)} to ${fmt(todayYards(c.max, course, "carry"),0)}</div></div>
+          <div class="stat-tile"><div class="k">± Stdev</div><div class="v">${fmt(c.stdev,1)}</div></div>
+          <div class="stat-tile"><div class="k">Consistency</div><div class="v">${c.consistency}</div></div>
+          <div class="stat-tile"><div class="k">Ball speed</div><div class="v">${fmt(c.ballSpeed,0)}</div></div>
+          <div class="stat-tile"><div class="k">Club speed</div><div class="v">${fmt(c.clubSpeed,0)}</div></div>
+          <div class="stat-tile"><div class="k">Smash</div><div class="v">${fmt(c.smash,2)}</div></div>
+          <div class="stat-tile"><div class="k">Apex</div><div class="v">${fmt(c.apex,0)}'</div></div>
+          <div class="stat-tile"><div class="k">Spin</div><div class="v">${c.spin}</div></div>
+          <div class="stat-tile"><div class="k">Spin axis</div><div class="v">${signed(c.axis,1)}°</div></div>
+          <div class="stat-tile"><div class="k">Launch</div><div class="v">${c.launch != null ? fmt(c.launch,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Descent</div><div class="v">${c.descent != null ? fmt(c.descent,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Horiz</div><div class="v">${c.horiz != null ? signed(c.horiz,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Face</div><div class="v">${c.face != null ? signed(c.face,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Path</div><div class="v">${c.path != null ? signed(c.path,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Face to path</div><div class="v">${c.faceToPath != null ? signed(c.faceToPath,1) + "°" : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Side carry</div><div class="v">${c.sideCarry != null ? signed(c.sideCarry,1) : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Side total</div><div class="v">${c.sideTotal != null ? signed(c.sideTotal,1) : "—"}</div></div>
+          <div class="stat-tile"><div class="k">Offline</div><div class="v">${signed(c.offline,1)}</div></div>
+          <div class="stat-tile"><div class="k">Spread</div><div class="v">${fmt(c.spread,1)}</div></div>
+          <div class="stat-tile"><div class="k">Miss</div><div class="v" style="font-size:1.05rem">${c.miss.split(" ")[0]}</div></div>
+          <div class="stat-tile"><div class="k">Shots used</div><div class="v">${c.shots}</div></div>
+        </div>
+        <h2 style="font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin:8px 0 8px">Vs benchmarks</h2>
+        <table class="vs-table">
+          <thead><tr><th></th><th>You</th><th>PGA</th><th>Scratch</th><th>10 HCP</th></tr></thead>
+          <tbody>
+            <tr><td>Carry</td><td class="you">${fmt(c.carry,0)}</td><td>${c.pga.carry}</td><td>${sc.carry}</td><td>${am.carry}</td></tr>
+            <tr><td>Total</td><td class="you">${fmt(c.total,0)}</td><td>${c.pga.total}</td><td>${sc.total}</td><td>${am.total}</td></tr>
+            <tr><td>Diff</td><td class="you">-</td><td>${signed(c.vsPga,0)}</td><td>${signed(c.vsScratch,0)}</td><td>${signed(c.vsAm10,0)}</td></tr>
+            <tr><td>Ball mph</td><td class="you">${fmt(c.ballSpeed,0)}</td><td>${c.pga.bs}</td><td>${sc.bs}</td><td>${am.bs}</td></tr>
+            <tr><td>Club mph</td><td class="you">${fmt(c.clubSpeed,0)}</td><td>${c.pga.cs}</td><td>${sc.cs}</td><td>${am.cs}</td></tr>
+            <tr><td>Smash</td><td class="you">${fmt(c.smash,2)}</td><td>${fmt(c.pga.smash,2)}</td><td>${fmt(sc.smash,2)}</td><td>${fmt(am.smash,2)}</td></tr>
+            <tr><td>Spin</td><td class="you">${c.spin}</td><td>${c.pga.spin}</td><td>${sc.spin}</td><td>${am.spin}</td></tr>
+            <tr><td>Apex</td><td class="you">${fmt(c.apex,0)}'</td><td>${c.pga.apex}'</td><td>${sc.apex}'</td><td>${am.apex}'</td></tr>
+            <tr><td>Launch</td><td class="you">${c.launch != null ? fmt(c.launch,1) + "°" : "—"}</td><td>${c.pga.launch != null ? fmt(c.pga.launch,1) + "°" : "—"}</td><td>${sc.launch != null ? fmt(sc.launch,1) + "°" : "—"}</td><td>${am.launch != null ? fmt(am.launch,1) + "°" : "—"}</td></tr>
+            <tr><td>Descent</td><td class="you">${c.descent != null ? fmt(c.descent,1) + "°" : "—"}</td><td>${c.pga.descent != null ? fmt(c.pga.descent,1) + "°" : "—"}</td><td>${sc.descent != null ? fmt(sc.descent,1) + "°" : "—"}</td><td>${am.descent != null ? fmt(am.descent,1) + "°" : "—"}</td></tr>
+            <tr><td>Attack</td><td class="you">${c.attack != null ? signed(c.attack,1) + "°" : "—"}</td><td>${c.pga.attack != null ? signed(c.pga.attack,1) + "°" : "—"}</td><td>${sc.attack != null ? signed(sc.attack,1) + "°" : "—"}</td><td>${am.attack != null ? signed(am.attack,1) + "°" : "—"}</td></tr>
+            <tr><td>Horiz</td><td class="you">${c.horiz != null ? signed(c.horiz,1) + "°" : "—"}</td><td>${signed(c.pga.horiz,1)}°</td><td>${signed(sc.horiz,1)}°</td><td>${signed(am.horiz,1)}°</td></tr>
+            <tr><td>Face</td><td class="you">${c.face != null ? signed(c.face,1) + "°" : "—"}</td><td>${signed(c.pga.face,1)}°</td><td>${signed(sc.face,1)}°</td><td>${signed(am.face,1)}°</td></tr>
+            <tr><td>Path</td><td class="you">${c.path != null ? signed(c.path,1) + "°" : "—"}</td><td>${signed(c.pga.path,1)}°</td><td>${signed(sc.path,1)}°</td><td>${signed(am.path,1)}°</td></tr>
+            <tr><td>Face/path</td><td class="you">${c.faceToPath != null ? signed(c.faceToPath,1) + "°" : "—"}</td><td>${signed(c.pga.faceToPath,1)}°</td><td>${signed(sc.faceToPath,1)}°</td><td>${signed(am.faceToPath,1)}°</td></tr>
+            <tr><td>Side carry</td><td class="you">${c.sideCarry != null ? signed(c.sideCarry,1) : "—"}</td><td>${signed(c.pga.sideCarry,1)}</td><td>${signed(sc.sideCarry,1)}</td><td>${signed(am.sideCarry,1)}</td></tr>
+            <tr><td>Side total</td><td class="you">${(c.sideTotal ?? c.offline) != null ? signed(c.sideTotal ?? c.offline,1) : "—"}</td><td>${signed(c.pga.sideTotal,1)}</td><td>${signed(sc.sideTotal,1)}</td><td>${signed(am.sideTotal,1)}</td></tr>
+          </tbody>
+        </table>
+        <p style="color:var(--muted);font-size:0.72rem;margin-top:2px">PGA numbers from TrackMan Tour averages. Scratch / 10 HCP distances are scaled; launch and descent use typical amateur offsets. Face, path, and side targets are straight (0° / 0 yd).</p>
+      `;
+      $("#backdrop").classList.add("open");
+      $("#sheet").classList.add("open");
+      $("#sheet").setAttribute("aria-hidden", "false");
+    }
+
+    function closeSheet() {
+      $("#backdrop").classList.remove("open");
+      $("#sheet").classList.remove("open");
+      $("#sheet").setAttribute("aria-hidden", "true");
+    }
+    $("#backdrop").addEventListener("click", closeSheet);
+    $("#sheetClose").addEventListener("click", closeSheet);
+
+    /* —— Live GPS —— */
+    const COURSES = window.GPS_COURSES || [];
+    const TEE_KEY = "bagbook_tees";
+    function loadTeePrefs() {
+      try { return JSON.parse(localStorage.getItem(TEE_KEY)) || {}; } catch { return {}; }
+    }
+    function saveTeePrefs(map) {
+      try { localStorage.setItem(TEE_KEY, JSON.stringify(map)); } catch {}
+    }
+    const teePrefs = loadTeePrefs();
+
+    const gps = {
+      watchId: null,
+      pos: null,          // { lat, lon, acc }
+      courseIdx: -1,      // -1 = auto
+      activeCourse: null, // resolved course object
+      hole: 0,            // 0 = auto, else hole number
+      activeHole: null,   // resolved hole object (with selected tee applied)
+      teeId: null,        // selected tee option id for active course
+    };
+
+    const YD_PER_M = 1.09361;
+    function distYd(a, b) {
+      const R = 6371000;
+      const toR = x => x * Math.PI / 180;
+      const dLat = toR(b.lat - a.lat);
+      const dLon = toR(b.lon - a.lon);
+      const h = Math.sin(dLat / 2) ** 2 +
+        Math.cos(toR(a.lat)) * Math.cos(toR(b.lat)) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h)) * YD_PER_M;
+    }
+
+    /** Bilinear sample of the embedded course elevation grid (meters). */
+    function courseElevAt(course, lat, lon) {
+      const e = course?.elev;
+      if (!e) return null;
+      const v = Math.max(0, Math.min(1, (lat - e.latmin) / (e.latmax - e.latmin)));
+      const u = Math.max(0, Math.min(1, (lon - e.lonmin) / (e.lonmax - e.lonmin)));
+      const rf = v * (e.h - 1), cf = u * (e.w - 1);
+      const r0 = Math.floor(rf), c0 = Math.floor(cf);
+      const r1 = Math.min(e.h - 1, r0 + 1), c1 = Math.min(e.w - 1, c0 + 1);
+      const tr = rf - r0, tc = cf - c0;
+      const g = (r, c) => e.g[r * e.w + c];
+      const top = g(r0, c0) * (1 - tc) + g(r0, c1) * tc;
+      const bot = g(r1, c0) * (1 - tc) + g(r1, c1) * tc;
+      return top * (1 - tr) + bot * tr;
+    }
+
+    /**
+     * Plays-like adjustment in yards for an elevation change.
+     * Caddie rule: ~1 yd per 3 ft of rise (add uphill, subtract downhill),
+     * capped so a bad GPS/DEM sample can't produce a silly number.
+     */
+    function elevAdjustYd(course, hole, pos) {
+      if (hole?.ge == null || !pos) return null;
+      const playerElev = courseElevAt(course, pos.lat, pos.lon);
+      if (playerElev == null) return null;
+      const deltaFt = (hole.ge - playerElev) * 3.28084;
+      if (Math.abs(deltaFt) < 3) return { adj: 0, ft: deltaFt };
+      const adj = Math.max(-25, Math.min(25, deltaFt / 3));
+      return { adj, ft: deltaFt };
+    }
+
+    /** Course altitude ASL in feet (center of elev grid). */
+    function courseAltFt(course) {
+      if (!course?.center) return null;
+      const m = courseElevAt(course, course.center.lat, course.center.lon);
+      return m == null ? null : m * 3.28084;
+    }
+
+    /* Live weather at selected course (Open-Meteo, no API key). */
+    const BAG_TEMP_F = 70; // launch-monitor baseline
+    const WX_TTL_MS = 5 * 60 * 1000;
+    const weatherCache = new Map(); // slug → { at, wx, pending }
+    let weatherSlug = null;
+
+    function activeCondCourse() {
+      return gps.activeCourse || (gps.courseIdx >= 0 ? COURSES[gps.courseIdx] : null);
+    }
+
+    /** Air density factor vs bag baseline: >1 = ball flies farther today. */
+    function airFactor(course) {
+      if (!course) return 1;
+      let f = 1;
+      const altFt = courseAltFt(course);
+      if (altFt != null) f += (altFt / 1000) * 0.02;
+      const wx = weatherCache.get(course.slug)?.wx;
+      if (wx && Number.isFinite(wx.tempF)) f += (wx.tempF - BAG_TEMP_F) / 1000;
+      if (wx && wx.humidity >= 75) f -= 0.006;
+      if (wx && wx.precip > 0.05) f -= 0.012;
+      return Math.max(0.88, Math.min(1.14, f));
+    }
+
+    /** Scale a bag yardage for live temp / humidity / altitude at the course. */
+    function todayYards(yd, course, kind = "carry") {
+      if (!course || !Number.isFinite(yd)) return yd;
+      const f = airFactor(course);
+      let out = yd * f;
+      if (kind === "total") {
+        const wx = weatherCache.get(course.slug)?.wx;
+        // Soft/wet turf cuts roll even after air-scaled flight
+        if (wx && wx.precip > 0.05) out = yd * f - Math.max(0, yd * 0.04);
+      }
+      return out;
+    }
+
+    function airParts(course, rawYd) {
+      if (!course || !Number.isFinite(rawYd)) return [];
+      const parts = [];
+      const altFt = courseAltFt(course);
+      if (altFt != null && Math.abs(altFt) >= 200) {
+        const a = -rawYd * (altFt / 1000) * 0.02;
+        if (Math.abs(a) >= 0.5) parts.push(`${Math.round(altFt)} ft ASL ${a > 0 ? "+" : ""}${Math.round(a)} on plays-like`);
+      }
+      const wx = weatherCache.get(course.slug)?.wx;
+      if (wx && Number.isFinite(wx.tempF)) {
+        const t = -rawYd * (wx.tempF - BAG_TEMP_F) / 1000;
+        if (Math.abs(t) >= 0.5) parts.push(`${Math.round(wx.tempF)}°F ${t > 0 ? "+" : ""}${Math.round(t)} on plays-like`);
+      }
+      if (wx && wx.humidity >= 75) parts.push(`humid air`);
+      if (wx && wx.precip > 0.05) parts.push(`wet — less roll`);
+      return parts;
+    }
+
+    function windCompass(deg) {
+      const dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+      return dirs[Math.round(((deg % 360) + 360) % 360 / 45) % 8];
+    }
+
+    /** Yards to add to plays-like target for wind (head +, tail −). Also returns cross + physical carry delta. */
+    function windAlong(course, pos, targetPt, rawYd) {
+      const wx = weatherCache.get(course?.slug)?.wx;
+      if (!wx || !pos || !targetPt || !Number.isFinite(wx.windMph) || wx.windMph < 3) {
+        return { playsAdj: 0, carryAdj: 0, crossMph: 0, label: null };
+      }
+      const shotDeg = ((bearingRad(pos, targetPt) * 180 / Math.PI) + 360) % 360;
+      const windTo = (wx.windFrom + 180) % 360;
+      const dAng = ((windTo - shotDeg + 540) % 360) - 180;
+      const rad = dAng * Math.PI / 180;
+      const along = wx.windMph * Math.cos(rad); // +tail, −head
+      const across = wx.windMph * Math.sin(rad);
+      let playsAdj = 0;
+      if (along < 0) playsAdj = (-along) * (rawYd / 150);
+      else playsAdj = -along * 0.5 * (rawYd / 150);
+      playsAdj = Math.max(-20, Math.min(20, playsAdj));
+      const label = Math.abs(along) < 1 ? "cross"
+        : along < 0 ? "head" : "tail";
+      return {
+        playsAdj,
+        carryAdj: -playsAdj, // physical carry moves opposite of plays-like
+        crossMph: across,
+        label,
+        mph: wx.windMph,
+      };
+    }
+
+    function renderCondBar(course, plays) {
+      const bar = $("#condBar"), main = $("#condMain"), sub = $("#condSub");
+      if (!course) { bar.hidden = true; return; }
+      bar.hidden = false;
+      const wx = weatherCache.get(course.slug)?.wx;
+      const alt = courseAltFt(course);
+      const altStr = alt != null ? `${Math.round(alt)} ft elev` : null;
+
+      if (!wx) {
+        main.textContent = altStr
+          ? `${altStr} · fetching live weather…`
+          : "Fetching live weather…";
+        sub.textContent = "Temp, wind, and elevation adjust distances and club calls. Updates every 5 min.";
+        return;
+      }
+
+      const tempStr = `${Math.round(wx.tempF)}°F`;
+      const windStr = `${Math.round(wx.windMph)} mph ${windCompass(wx.windFrom)}`;
+      const feel = wx.precip > 0.05 ? "wet" : wx.humidity >= 80 ? "humid" : "firm-ish air";
+      main.textContent = [tempStr, windStr, altStr].filter(Boolean).join(" · ");
+
+      const bits = [];
+      if (plays?.parts?.length) bits.push(plays.parts.join(", "));
+      else {
+        const f = airFactor(course);
+        if (Math.abs(f - 1) >= 0.005) {
+          bits.push(`bag carries ${f > 1 ? "+" : ""}${Math.round((f - 1) * 100)}% today`);
+        } else {
+          bits.push("distances near stock");
+        }
+      }
+      bits.push(`${feel} · updates every 5 min`);
+      sub.textContent = bits.join(". ");
+    }
+
+    function renderPlayCond() {
+      const bar = $("#playCondBar"), main = $("#playCondMain"), sub = $("#playCondSub");
+      if (!bar) return;
+      const course = activeCondCourse();
+      if (!course) {
+        bar.hidden = false;
+        main.textContent = "No course selected";
+        sub.textContent = "Pick a course on Live GPS to apply weather and elevation to Play distances and bag stats.";
+        return;
+      }
+      bar.hidden = false;
+      const wx = weatherCache.get(course.slug)?.wx;
+      const alt = courseAltFt(course);
+      const f = airFactor(course);
+      if (!wx) {
+        main.textContent = `${course.name} · loading weather…`;
+        sub.textContent = alt != null ? `${Math.round(alt)} ft elev` : "";
+        return;
+      }
+      main.textContent = `${course.name} · ${Math.round(wx.tempF)}°F · ${Math.round(wx.windMph)} mph ${windCompass(wx.windFrom)}${alt != null ? ` · ${Math.round(alt)} ft` : ""}`;
+      const pct = Math.round((f - 1) * 100);
+      sub.textContent = pct === 0
+        ? "Club numbers use bag stock. Wind on Live GPS still moves plays-like."
+        : `Today's carries ${pct > 0 ? "+" : ""}${pct}% vs bag (temp/elev/humidity). Club calls use adjusted distances.`;
+    }
+
+    async function fetchCourseWeather(course, force = false) {
+      if (!course?.center) return null;
+      const hit = weatherCache.get(course.slug);
+      if (!force && hit?.wx && Date.now() - hit.at < WX_TTL_MS) return hit.wx;
+      const { lat, lon } = course.center;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&current=temperature_2m,relative_humidity_2m,precipitation,wind_speed_10m,wind_direction_10m` +
+        `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`weather ${res.status}`);
+        const j = await res.json();
+        const cur = j.current || {};
+        const wx = {
+          tempF: cur.temperature_2m,
+          humidity: cur.relative_humidity_2m,
+          precip: cur.precipitation ?? 0,
+          windMph: cur.wind_speed_10m ?? 0,
+          windFrom: cur.wind_direction_10m ?? 0,
+          at: Date.now(),
+        };
+        weatherCache.set(course.slug, { at: Date.now(), wx, pending: false });
+        return wx;
+      } catch {
+        return hit?.wx || null;
+      }
+    }
+
+    function onConditionsUpdated() {
+      renderPlayCond();
+      renderPick();
+      renderBag();
+      renderCompare();
+      renderInsights();
+    }
+
+    function ensureWeather(course, force = false) {
+      if (!course) {
+        weatherSlug = null;
+        renderCondBar(null, null);
+        renderPlayCond();
+        return;
+      }
+      const hit = weatherCache.get(course.slug);
+      const fresh = !force && hit?.wx && Date.now() - hit.at < WX_TTL_MS;
+      if (fresh) {
+        weatherSlug = course.slug;
+        return;
+      }
+      if (!force && weatherSlug === course.slug && hit?.pending) return;
+      weatherSlug = course.slug;
+      weatherCache.set(course.slug, { at: hit?.at || 0, wx: hit?.wx || null, pending: true });
+      fetchCourseWeather(course, force).finally(() => {
+        const cur = weatherCache.get(course.slug);
+        if (cur) cur.pending = false;
+        if (activeCondCourse()?.slug === course.slug) {
+          onConditionsUpdated();
+          renderGps();
+        }
+      });
+    }
+
+    // Refresh live weather every 5 minutes for the active course
+    setInterval(() => {
+      const c = activeCondCourse();
+      if (c) ensureWeather(c, true);
+    }, WX_TTL_MS);
+
+    /**
+     * Plays-like yards for GPS: raw + elev change + wind along the shot.
+     * Temp / altitude / humidity scale club carries via todayYards() instead
+     * (so they are not double-counted).
+     */
+    function playsLikeYd(course, hole, pos, rawYd, targetPt) {
+      const parts = [];
+      let adj = 0;
+
+      const elev = elevAdjustYd(course, hole, pos);
+      if (elev && Math.abs(elev.adj) >= 0.5) {
+        adj += elev.adj;
+        const dir = elev.ft > 0 ? "uphill" : "downhill";
+        parts.push(`${Math.round(Math.abs(elev.ft))} ft ${dir} ${elev.adj > 0 ? "+" : ""}${Math.round(elev.adj)}`);
+      }
+
+      const wind = windAlong(course, pos, targetPt, rawYd);
+      if (Math.abs(wind.playsAdj) >= 0.5) {
+        adj += wind.playsAdj;
+        parts.push(`${Math.round(wind.mph)} mph ${wind.label} ${wind.playsAdj > 0 ? "+" : ""}${Math.round(wind.playsAdj)}`);
+      }
+
+      parts.push(...airParts(course, rawYd).filter(p => !/plays-like/.test(p)));
+      // Surface air effect on the call: show bag-factor note, clubDistance already scaled
+      const f = airFactor(course);
+      if (Math.abs(f - 1) >= 0.005) {
+        parts.push(`air ${f > 1 ? "+" : ""}${Math.round((f - 1) * 100)}% on bag`);
+      }
+
+      return {
+        target: Math.max(0, rawYd + adj),
+        adj,
+        elev,
+        wx: weatherCache.get(course?.slug)?.wx,
+        crossMph: wind.crossMph,
+        parts,
+      };
+    }
+
+    function nearestCourse(pos) {
+      let best = null, bestD = Infinity;
+      for (const c of COURSES) {
+        const d = distYd(pos, c.center);
+        if (d < bestD) { bestD = d; best = c; }
+      }
+      // Only auto-lock when actually at the course (~3500 yd of its center)
+      return bestD < 3500 ? best : null;
+    }
+
+    function courseScorecards(c) {
+      if (!c) return [];
+      if (c.scorecards?.length) return c.scorecards;
+      if (!c.tee && !c.holes?.some(h => h.yds != null)) return [];
+      return [{
+        name: c.tee || "Tees",
+        rank: 0,
+        holes: Object.fromEntries((c.holes || []).map(h => [String(h.n), h.yds])),
+        pars: Object.fromEntries((c.holes || []).map(h => [String(h.n), h.par])),
+      }];
+    }
+
+    function teePadsForHole(h) {
+      if (!h) return [];
+      if (h.teePads?.length) return h.teePads;
+      const mid = h.m;
+      if (!mid || !h.tees?.length) return [];
+      return h.tees.map(ring => {
+        if (!ring?.length) return null;
+        let lat = 0, lon = 0;
+        for (const p of ring) { lat += p.lat; lon += p.lon; }
+        lat /= ring.length; lon /= ring.length;
+        return { lat, lon, d: Math.round(distYd({ lat, lon }, mid)) };
+      }).filter(Boolean).sort((a, b) => b.d - a.d);
+    }
+
+    /** Tee options for a course: scorecard colors, plus Tips/Forward when useful. */
+    function teeOptions(c) {
+      if (!c) return [];
+      const cards = courseScorecards(c);
+      const opts = cards.map(sc => ({
+        id: `sc:${sc.name}`,
+        label: `${sc.name} tees`,
+        kind: "scorecard",
+        card: sc,
+      }));
+      const pads = teePadsForHole(c.holes?.[0]);
+      if (cards.length <= 1 && pads.length >= 2 && (pads[0].d - pads[pads.length - 1].d) >= 15) {
+        opts.unshift({ id: "pad:0", label: "Tips", kind: "pad", padIndex: 0 });
+        opts.push({ id: `pad:${pads.length - 1}`, label: "Forward", kind: "pad", padIndex: pads.length - 1 });
+      }
+      return opts;
+    }
+
+    function defaultTeeId(c) {
+      const opts = teeOptions(c);
+      if (!opts.length) return null;
+      const pref = teePrefs[c.slug];
+      if (pref && opts.some(o => o.id === pref)) return pref;
+      if (c.tee) {
+        const match = opts.find(o => o.kind === "scorecard" && o.card.name === c.tee);
+        if (match) return match.id;
+      }
+      const sc = opts.find(o => o.kind === "scorecard");
+      return (sc || opts[0]).id;
+    }
+
+    function currentTeeOption(c) {
+      const opts = teeOptions(c);
+      if (!opts.length) return null;
+      const id = gps.teeId || defaultTeeId(c);
+      return opts.find(o => o.id === id) || opts[0];
+    }
+
+    function padAt(h, index) {
+      const pads = teePadsForHole(h);
+      if (!pads.length) return null;
+      const i = index < 0 ? pads.length + index : index;
+      return pads[Math.max(0, Math.min(pads.length - 1, i))] || null;
+    }
+
+    /** Apply selected tee set: scorecard yds/par + matching tee box GPS. */
+    function holeForTee(c, h) {
+      if (!h) return null;
+      const opt = currentTeeOption(c);
+      if (!opt) return h;
+      const out = { ...h, teeName: null };
+      const pads = teePadsForHole(h);
+      if (opt.kind === "scorecard") {
+        const key = String(h.n);
+        out.yds = opt.card.holes?.[key] ?? h.yds;
+        out.par = opt.card.pars?.[key] ?? h.par;
+        out.teeName = opt.card.name;
+        const cards = courseScorecards(c).slice().sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+        const ci = Math.max(0, cards.findIndex(t => t.name === opt.card.name));
+        if (pads.length) {
+          const pi = cards.length <= 1
+            ? Math.min(ci, pads.length - 1)
+            : Math.round((ci / Math.max(1, cards.length - 1)) * (pads.length - 1));
+          const pad = pads[pi];
+          if (pad) out.tee = { lat: pad.lat, lon: pad.lon };
+        }
+      } else if (opt.kind === "pad") {
+        const pad = padAt(h, opt.padIndex);
+        if (pad) {
+          out.tee = { lat: pad.lat, lon: pad.lon };
+          out.yds = pad.d ?? Math.round(distYd(out.tee, h.m));
+          out.teeName = opt.label;
+        }
+      }
+      return out;
+    }
+
+    function nearestHole(course, pos) {
+      let best = null, bestD = Infinity;
+      for (const raw of course.holes) {
+        const h = holeForTee(course, raw);
+        // You stand between the tee and the green of the hole you're playing:
+        // score by distance to tee, but the ball gets closer to the green as
+        // you play, so also consider the middle.
+        const d = Math.min(distYd(pos, h.tee), distYd(pos, h.m) * 1.35);
+        if (d < bestD) { bestD = d; best = raw; }
+      }
+      return best;
+    }
+
+    function resolveState() {
+      const prevSlug = gps.activeCourse?.slug || null;
+      gps.activeCourse = gps.courseIdx >= 0
+        ? COURSES[gps.courseIdx]
+        : (gps.pos ? nearestCourse(gps.pos) : null);
+      if (!gps.activeCourse) {
+        gps.activeHole = null;
+        gps.teeId = null;
+        return;
+      }
+      if (gps.activeCourse.slug !== prevSlug) {
+        gps.teeId = defaultTeeId(gps.activeCourse);
+      } else {
+        gps.teeId = gps.teeId && teeOptions(gps.activeCourse).some(o => o.id === gps.teeId)
+          ? gps.teeId
+          : defaultTeeId(gps.activeCourse);
+      }
+      const raw = gps.hole > 0
+        ? gps.activeCourse.holes.find(h => h.n === gps.hole) || null
+        : (gps.pos ? nearestHole(gps.activeCourse, gps.pos) : null);
+      gps.activeHole = holeForTee(gps.activeCourse, raw);
+    }
+
+    function renderGpsCourseSel() {
+      const sel = $("#gpsCourseSel");
+      sel.innerHTML = `<option value="-1">Auto-detect course (GPS)</option>` +
+        COURSES.map((c, i) =>
+          `<option value="${i}">${c.name}</option>`
+        ).join("");
+      sel.value = String(gps.courseIdx);
+    }
+
+    function renderGpsTeeSel() {
+      const sel = $("#gpsTeeSel");
+      const c = gps.activeCourse;
+      const opts = teeOptions(c);
+      if (!c || opts.length < 1) {
+        sel.hidden = true;
+        sel.innerHTML = "";
+        return;
+      }
+      sel.hidden = false;
+      sel.innerHTML = opts.map(o => {
+        const card = o.kind === "scorecard" ? o.card : null;
+        const total = card?.total ? ` · ${card.total} yd` : "";
+        return `<option value="${o.id}">${o.label}${total}</option>`;
+      }).join("");
+      sel.value = gps.teeId || defaultTeeId(c);
+    }
+
+    function renderHoleStrip() {
+      const strip = $("#holeStrip");
+      if (!gps.activeCourse) { strip.innerHTML = ""; return; }
+      const autoChip = `<button type="button" class="hole-chip ${gps.hole === 0 ? "on" : ""}" data-hole="0">AUTO<span class="p">gps</span></button>`;
+      strip.innerHTML = autoChip + gps.activeCourse.holes.map(raw => {
+        const h = holeForTee(gps.activeCourse, raw);
+        return `
+        <button type="button" class="hole-chip ${gps.hole === h.n || (gps.hole === 0 && gps.activeHole?.n === h.n) ? "on" : ""}" data-hole="${h.n}">
+          ${h.n}<span class="p">par ${h.par ?? "?"}</span>
+        </button>`;
+      }).join("");
+      $$(".hole-chip", strip).forEach(b => {
+        b.addEventListener("click", () => {
+          gps.hole = Number(b.dataset.hole);
+          renderGps();
+        });
+      });
+    }
+
+    /* pin storage (per course+hole, kept in the browser) */
+    const PIN_KEY = "bagbook_pins";
+    function loadPins() { try { return JSON.parse(localStorage.getItem(PIN_KEY)) || {}; } catch { return {}; } }
+    function savePins() { try { localStorage.setItem(PIN_KEY, JSON.stringify(pins)); } catch {} }
+    let pins = loadPins();
+    const pinKey = (c, h) => `${c.slug}:${h.n}`;
+    const getPin = (c, h) => (c && h) ? (pins[pinKey(c, h)] || null) : null;
+    function setPinCoord(c, h, lat, lon) { pins[pinKey(c, h)] = { lat, lon, t: Date.now() }; savePins(); }
+    function clearPin(c, h) { delete pins[pinKey(c, h)]; savePins(); }
+
+    function bearingRad(a, b) {
+      const toR = x => x * Math.PI / 180;
+      const φ1 = toR(a.lat), φ2 = toR(b.lat);
+      const Δλ = toR(b.lon - a.lon);
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      return Math.atan2(y, x);
+    }
+
+    /** Destination point: yards along a bearing (0 = north, clockwise). */
+    function destYd(from, bearing, yards) {
+      const R = 6371000;
+      const δ = (yards / YD_PER_M) / R;
+      const θ = bearing;
+      const φ1 = from.lat * Math.PI / 180;
+      const λ1 = from.lon * Math.PI / 180;
+      const φ2 = Math.asin(Math.sin(φ1) * Math.cos(δ) + Math.cos(φ1) * Math.sin(δ) * Math.cos(θ));
+      const λ2 = λ1 + Math.atan2(
+        Math.sin(θ) * Math.sin(δ) * Math.cos(φ1),
+        Math.cos(δ) - Math.sin(φ1) * Math.sin(φ2),
+      );
+      return { lat: φ2 * 180 / Math.PI, lon: ((λ2 * 180 / Math.PI + 540) % 360) - 180 };
+    }
+
+    /**
+     * Pick where to land the ball from bag data + hole + green contour.
+     * Returns aim line (start), want (HIT HERE finish), and club advice.
+     */
+    function sampleGElev(h, lat, lon) {
+      const e = h?.gElev;
+      if (!e?.g) return null;
+      const vv = Math.max(0, Math.min(1, (lat - e.latmin) / (e.latmax - e.latmin)));
+      const uu = Math.max(0, Math.min(1, (lon - e.lonmin) / (e.lonmax - e.lonmin)));
+      const rf = vv * (e.h - 1), cf = uu * (e.w - 1);
+      const r0 = Math.floor(rf), c0 = Math.floor(cf);
+      const r1 = Math.min(e.h - 1, r0 + 1), c1 = Math.min(e.w - 1, c0 + 1);
+      const tr = rf - r0, tc = cf - c0;
+      const g = (r, c) => e.g[r * e.w + c];
+      return g(r0, c0) * (1 - tr) * (1 - tc) + g(r0, c1) * (1 - tr) * tc +
+        g(r1, c0) * tr * (1 - tc) + g(r1, c1) * tr * tc;
+    }
+
+    function pointInGreen(h, p) {
+      const ring = h.green;
+      if (!ring || ring.length < 3) return true;
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const yi = ring[i].lat, xi = ring[i].lon;
+        const yj = ring[j].lat, xj = ring[j].lon;
+        const intersect = ((yi > p.lat) !== (yj > p.lat)) &&
+          (p.lon < (xj - xi) * (p.lat - yi) / ((yj - yi) || 1e-12) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function computeHitPlan(h, pos, pin, club) {
+      if (!h || !pos || !club) return null;
+      const flag = pin || h.m;
+      const toFlag = distYd(pos, flag);
+      const course = activeCondCourse();
+      const wind = windAlong(course, pos, flag, club.stock);
+      const stock = Math.max(30, todayYards(club.stock, course, "carry") + wind.carryAdj);
+      const side = club.sideTotal ?? club.offline ?? 0;
+      const holds = (club.spin >= 7000) && (club.descent == null || club.descent >= 45);
+      const releases = (club.spin > 0 && club.spin < 5500) || (club.descent != null && club.descent < 42);
+      const approachBrg = bearingRad(pos, flag);
+      const greenDepth = Math.max(8, distYd(h.f, h.b));
+
+      let want, mode, reasonBits = [];
+
+      if (toFlag <= stock + 12) {
+        // Can reach the green — land on the putting surface
+        mode = "green";
+        want = { ...flag };
+
+        // Depth: release clubs land short of pin; hold clubs can take pin
+        const towardFront = bearingRad(h.b, h.f);
+        if (releases) {
+          const shortYd = Math.min(10, greenDepth * 0.35);
+          want = destYd(want, towardFront, shortYd);
+          reasonBits.push(`lands short of ${pin ? "pin" : "middle"} (release club)`);
+        } else if (holds && pin) {
+          reasonBits.push("holds greens — can take the pin");
+        } else if (!pin) {
+          reasonBits.push("no pin set — aiming middle");
+        }
+
+        // Contour: prefer the higher side so a miss doesn't run off downhill
+        const leftOfApproach = approachBrg - Math.PI / 2;
+        const rightOfApproach = approachBrg + Math.PI / 2;
+        const leftPt = destYd(want, leftOfApproach, 6);
+        const rightPt = destYd(want, rightOfApproach, 6);
+        const eL = sampleGElev(h, leftPt.lat, leftPt.lon);
+        const eR = sampleGElev(h, rightPt.lat, rightPt.lon);
+        if (eL != null && eR != null && Math.abs(eL - eR) >= 0.25) {
+          // Bias a few yards toward the high side
+          const highRight = eR > eL;
+          want = destYd(want, highRight ? rightOfApproach : leftOfApproach, 4);
+          reasonBits.push(`favor ${highRight ? "right" : "left"} (higher contour)`);
+        }
+
+        // Keep target on the green if we have a ring
+        if (!pointInGreen(h, want)) want = { ...h.m };
+
+        // Fat of green vs miss: if typical miss is strong, prefer center over pin edge
+        if (Math.abs(side) >= 6 && pin) {
+          want = {
+            lat: want.lat * 0.45 + h.m.lat * 0.55,
+            lon: want.lon * 0.45 + h.m.lon * 0.55,
+          };
+          reasonBits.push(`play fat — miss averages ${side > 0 ? "R" : "L"}${Math.abs(side).toFixed(0)} yd`);
+        }
+      } else {
+        // Fairway / layup — land stock carry along the hole toward the green
+        mode = toFlag > stock + 40 ? "fairway" : "layup";
+        const alongHole = bearingRad(pos, h.m);
+        want = destYd(pos, alongHole, stock);
+        // Nudge toward middle of green line (safer corridor)
+        const toMid = bearingRad(want, h.m);
+        want = destYd(want, toMid, Math.min(12, distYd(want, h.m) * 0.15));
+        reasonBits.push(mode === "fairway"
+          ? `stock ${Math.round(stock)} yd into the fairway`
+          : `layup short of green at ${Math.round(stock)} yd`);
+      }
+
+      // Aim opposite the typical side miss so expected finish = want
+      const toWant = bearingRad(pos, want);
+      const aimAt = destYd(want, toWant - Math.PI / 2, side); // compensate: finish right → aim left of want
+      const brg = bearingRad(pos, aimAt);
+      const along = destYd(pos, brg, stock);
+      const expect = destYd(along, brg + Math.PI / 2, side);
+
+      const aimNote = Math.abs(side) >= 2
+        ? `Aim ${side > 0 ? "left" : "right"} of the yellow target — ball finishes ~${Math.abs(side).toFixed(0)} yd ${side > 0 ? "right" : "left"}.`
+        : "Start line at the yellow target.";
+
+      return {
+        club,
+        mode,
+        want,
+        aimAt,
+        expect,
+        brg,
+        stock,
+        side,
+        toFlag,
+        aimNote,
+        reason: reasonBits.join(" · "),
+      };
+    }
+
+    function renderHitCall(plan, plays) {
+      const el = $("#hitCall");
+      if (!plan) { el.hidden = true; el.innerHTML = ""; return; }
+      el.hidden = false;
+      const modeLabel = plan.mode === "green" ? "Land on green"
+        : plan.mode === "layup" ? "Layup target"
+        : "Fairway target";
+      let windNote = "";
+      if (plays?.crossMph != null && Math.abs(plays.crossMph) >= 4) {
+        windNote = ` Crosswind ~${Math.abs(plays.crossMph).toFixed(0)} mph from the ${plays.crossMph > 0 ? "right" : "left"}.`;
+      } else if (plays?.parts?.some(p => /head|tail/.test(p))) {
+        windNote = " Wind is in the plays-like number.";
+      }
+      const fromNote = plan.fromTee ? " From the tee. " : " ";
+      el.innerHTML = `
+        <div class="hc-club">${plan.club.id} · ${Math.round(plan.stock)} yd</div>
+        <div class="hc-main">${modeLabel} — hit the yellow zone</div>
+        <div class="hc-sub">${fromNote}${plan.aimNote}${plan.reason ? ` ${plan.reason}.` : ""} ${Math.round(plan.toFlag)} yd to ${plan.mode === "green" ? "target" : "flag"}.${windNote}</div>`;
+    }
+
+    /**
+     * Live GPS maps — hole + green with bag-based HIT HERE target.
+     * Standing point is live GPS when available, otherwise the tee so the
+     * yellow zone still appears when a hole is selected.
+     */
+    function renderHoleMap(c, h, pin, ranked, plays, standPos) {
+      const pos = standPos || gps.pos || (h?.tee ? { ...h.tee, acc: 0 } : null);
+      const fromTee = !gps.pos && !!h?.tee;
+      let plan = null;
+      if (c && h && pos && ranked?.[0]) {
+        plan = computeHitPlan(h, pos, pin, ranked[0].club);
+        if (plan) plan.fromTee = fromTee;
+      }
+      renderHitCall(plan, plays);
+      if (!window.YardageLiveMap) {
+        const panel = $("#holeMapPanel");
+        if (panel) panel.hidden = !c || !h;
+        return;
+      }
+      YardageLiveMap.render({
+        course: c,
+        hole: h,
+        holeCanvas: $("#holeMapHole"),
+        greenCanvas: $("#holeMapGreen"),
+        panel: $("#holeMapPanel"),
+        titleEl: $("#holeMapTitle"),
+        legEl: $("#holeMapLeg"),
+        greenLabelEl: $("#holeMapGreenLabel"),
+        gpsPos: pos,
+        fromTee,
+        pin,
+        plan,
+        land: plan?.want || null,
+        landClub: plan?.club || null,
+        landOnGreen: !plan || plan.mode === "green",
+        aimAt: plan?.aimAt || null,
+        expect: plan?.expect || null,
+        brg: plan?.brg != null ? plan.brg : null,
+      });
+    }
+
+    function renderPinBar(c, h, pin) {
+      const bar = $("#pinBar"), v = $("#pinV"), actions = $("#pinActions");
+      if (!c || !h) {
+        bar.classList.remove("set");
+        v.textContent = "Not set";
+        actions.innerHTML = `<button type="button" class="pin-btn primary" id="pinSetBtn" disabled style="opacity:.5">Drop pin</button>`;
+        return;
+      }
+      if (pin) {
+        bar.classList.add("set");
+        const depth = Math.round(distYd(pin, h.f));
+        if (gps.pos) {
+          const toPin = Math.round(distYd(gps.pos, pin));
+          v.innerHTML = `${toPin}<small>to pin, ${depth} on</small>`;
+        } else {
+          v.innerHTML = `Set<small>${depth} yd onto green</small>`;
+        }
+        actions.innerHTML = `
+          <button type="button" class="pin-btn" id="pinMoveBtn">Move</button>
+          <button type="button" class="pin-btn" id="pinClearBtn">Clear</button>`;
+        $("#pinMoveBtn").addEventListener("click", openPinMap);
+        $("#pinClearBtn").addEventListener("click", () => { clearPin(c, h); renderGps(); });
+      } else {
+        bar.classList.remove("set");
+        v.textContent = "Not set";
+        actions.innerHTML = `<button type="button" class="pin-btn primary" id="pinSetBtn">Drop pin</button>`;
+        $("#pinSetBtn").addEventListener("click", openPinMap);
+      }
+    }
+
+    function renderGps() {
+      resolveState();
+      const c = gps.activeCourse, h = gps.activeHole;
+
+      $("#gpsCourseName").textContent = c ? c.name : "Live GPS";
+      $("#gpsAcc").textContent = gps.watchId == null
+        ? "GPS off"
+        : gps.pos
+          ? `GPS ±${Math.round(gps.pos.acc)} m${gps.courseIdx < 0 && !c ? ", no mapped course nearby" : ""}`
+          : "Locating…";
+
+      ensureWeather(c);
+      renderPlayCond();
+      renderGpsTeeSel();
+      renderHoleStrip();
+
+      const dF = $("#dF"), dM = $("#dM"), dB = $("#dB");
+      const sub = $("#gpsSub");
+      const box = $("#gpsPickResult");
+      const head = $("#gpsPickHead");
+      const pin = getPin(c, h);
+      renderPinBar(c, h, pin);
+
+      if (!c || !h) {
+        dF.textContent = dM.textContent = dB.textContent = "-";
+        head.textContent = "Club call to middle";
+        sub.textContent = COURSES.length
+          ? "Start GPS on the course, or pick a course and hole to see the call."
+          : "No course data found. Rebuild greens.js.";
+        box.innerHTML = `<p class="empty-hint">Waiting for a distance…</p>`;
+        renderCondBar(c, null);
+        // Course picked but hole still AUTO: preview hole 1 with tee-based hit target
+        if (c?.holes?.[0] && gps.courseIdx >= 0) {
+          const preview = holeForTee(c, c.holes[0]);
+          const pinP = getPin(c, preview);
+          const stand = gps.pos || { ...preview.tee, acc: 0 };
+          const flag = pinP || preview.m;
+          const raw = distYd(stand, flag);
+          const plays = playsLikeYd(c, preview, stand, raw, flag);
+          const ranked = (plays.target >= 15 && plays.target <= 360) ? recommend(plays.target) : null;
+          renderHoleMap(c, preview, pinP, ranked, plays, stand);
+        } else {
+          renderHoleMap(null, null, null, null);
+        }
+        return;
+      }
+
+      const teeLabel = h.teeName || currentTeeOption(c)?.label || c.tee || "";
+      const holeLabel = `Hole ${h.n}${h.par ? `, Par ${h.par}` : ""}${h.yds ? `, ${h.yds}y` : ""}${teeLabel ? ` · ${teeLabel}` : ""}`;
+      const stand = gps.pos || { ...h.tee, acc: 0 };
+      const fromTee = !gps.pos;
+
+      const f = distYd(stand, h.f);
+      const m = distYd(stand, h.m);
+      const b = distYd(stand, h.b);
+      dF.textContent = Math.round(f);
+      dM.textContent = Math.round(m);
+      dB.textContent = Math.round(b);
+
+      const flag = pin || h.m;
+      const raw = distYd(stand, flag);
+      const plays = playsLikeYd(c, h, stand, raw, flag);
+      const target = plays.target;
+      renderCondBar(c, plays);
+
+      let condNote = "";
+      if (plays.parts.length) {
+        condNote = `, plays like ${Math.round(target)} (${plays.parts.join("; ")})`;
+      }
+      head.textContent = (pin ? "Club call to pin" : "Club call to middle") +
+        (fromTee ? " (from tee)" : "") +
+        (plays.parts.length ? `, plays like ${Math.round(target)}` : "");
+      sub.textContent = fromTee
+        ? `${holeLabel}, green is ${Math.round(b - f)} yd deep${pin ? ", pin set" : ""}. Yellow zone = where to land it. Start GPS for live yardages.${condNote}`
+        : `${holeLabel}, green is ${Math.round(b - f)} yd deep${pin ? ", pin set" : ""}${condNote}`;
+
+      if (target < 15 || target > 360) {
+        box.innerHTML = `<p class="empty-hint">${target < 15 ? "You're on the green. Putt." : "Walk toward the hole for a club call."}</p>`;
+        renderHoleMap(c, h, pin, null, plays, stand);
+        return;
+      }
+      const ranked = recommend(target);
+      box.innerHTML = clubCallHtml(target, ranked, "carry");
+      renderHoleMap(c, h, pin, ranked, plays, stand);
+    }
+
+    /* Satellite pin picker */
+    let pinMap = null, pinMapCourse = null, pinMapHole = null, pinGreenLayer = null;
+    function openPinMap() {
+      const c = gps.activeCourse, h = gps.activeHole;
+      if (!c || !h) return;
+      const wrap = $("#mapWrap");
+      if (typeof L === "undefined") {
+        $("#mapHint").textContent = "Map needs an internet connection to load satellite imagery.";
+        wrap.classList.add("open");
+        wrap.setAttribute("aria-hidden", "false");
+        return;
+      }
+      pinMapCourse = c; pinMapHole = h;
+      $("#mapTitle").textContent = `Pin, Hole ${h.n}`;
+      $("#mapHint").textContent = "Drag the green under the marker, then Save";
+      wrap.classList.add("open");
+      wrap.setAttribute("aria-hidden", "false");
+
+      const existing = getPin(c, h);
+      const center = existing ? [existing.lat, existing.lon] : [h.m.lat, h.m.lon];
+      if (!pinMap) {
+        pinMap = L.map("pinMap", { zoomControl: true, attributionControl: true }).setView(center, 19);
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+          maxZoom: 21,
+          maxNativeZoom: 19,
+          attribution: "Imagery &copy; Esri",
+        }).addTo(pinMap);
+      } else {
+        pinMap.setView(center, 19);
+      }
+      if (pinGreenLayer) { pinMap.removeLayer(pinGreenLayer); pinGreenLayer = null; }
+      if (h.green?.length >= 3) {
+        const latlngs = h.green.map(p => [p.lat, p.lon]);
+        pinGreenLayer = L.polygon(latlngs, {
+          color: "#8fd9a8",
+          weight: 2,
+          fillColor: "#3d8f5a",
+          fillOpacity: 0.28,
+        }).addTo(pinMap);
+        try { pinMap.fitBounds(pinGreenLayer.getBounds().pad(0.35)); } catch {}
+      }
+      setTimeout(() => pinMap.invalidateSize(), 150);
+    }
+    function closePinMap() {
+      const wrap = $("#mapWrap");
+      wrap.classList.remove("open");
+      wrap.setAttribute("aria-hidden", "true");
+    }
+    function savePinFromMap() {
+      if (!pinMap || !pinMapCourse || !pinMapHole) { closePinMap(); return; }
+      const ctr = pinMap.getCenter();
+      setPinCoord(pinMapCourse, pinMapHole, ctr.lat, ctr.lng);
+      closePinMap();
+      renderGps();
+    }
+    $("#mapClose").addEventListener("click", closePinMap);
+    $("#mapCancel").addEventListener("click", closePinMap);
+    $("#mapSave").addEventListener("click", savePinFromMap);
+
+    function startGps() {
+      if (!navigator.geolocation) {
+        $("#gpsAcc").textContent = "Geolocation not supported on this device";
+        return;
+      }
+      const btn = $("#gpsToggle");
+      btn.classList.add("live");
+      btn.innerHTML = `<span class="gps-dot"></span>Stop`;
+      $("#gpsAcc").textContent = "Locating…";
+      gps.watchId = navigator.geolocation.watchPosition(
+        p => {
+          gps.pos = {
+            lat: p.coords.latitude,
+            lon: p.coords.longitude,
+            acc: p.coords.accuracy ?? 0,
+          };
+          renderGps();
+        },
+        err => {
+          stopGps();
+          $("#gpsAcc").textContent = err.code === 1
+            ? "Location blocked. Allow it in Settings, and open this page over HTTPS"
+            : `GPS error: ${err.message}`;
+        },
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+      );
+    }
+
+    function stopGps() {
+      if (gps.watchId != null) navigator.geolocation.clearWatch(gps.watchId);
+      gps.watchId = null;
+      gps.pos = null;
+      const btn = $("#gpsToggle");
+      btn.classList.remove("live");
+      btn.innerHTML = `<span class="gps-dot"></span>Start`;
+      renderGps();
+    }
+
+    $("#gpsToggle").addEventListener("click", () => {
+      gps.watchId == null ? startGps() : stopGps();
+    });
+    $("#gpsCourseSel").addEventListener("change", e => {
+      gps.courseIdx = Number(e.target.value);
+      gps.hole = 0;
+      gps.teeId = null;
+      const c = gps.courseIdx >= 0 ? COURSES[gps.courseIdx] : null;
+      if (c) gps.teeId = defaultTeeId(c);
+      renderGps();
+    });
+    $("#gpsTeeSel").addEventListener("change", e => {
+      gps.teeId = e.target.value;
+      const c = gps.activeCourse || (gps.courseIdx >= 0 ? COURSES[gps.courseIdx] : null);
+      if (c?.slug && gps.teeId) {
+        teePrefs[c.slug] = gps.teeId;
+        saveTeePrefs(teePrefs);
+      }
+      renderGps();
+    });
+
+    /* —— Init —— */
+    renderBag();
+    renderCompare();
+    renderInsights();
+    renderPick();
+    renderPlayCond();
+    renderGpsCourseSel();
+    renderGps();
+  </script>
+</body>
+</html>
